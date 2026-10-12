@@ -1,0 +1,1183 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1722">
+<title>Rotam</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Overpass:wght@400;600;700&family=Overpass+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+/* Layout: masaüstünde solda "hat şeması" paneli + sağda harita; telefonda tam ekran harita + sürüklenebilir alt panel.
+   Kimlik: ulaşım tabelası — sarı yol levhası, kalkış panosu, durak listesi bir metro hattı gibi. */
+:root{
+  --paper:#e7eae3; --panel:#f6f7f2; --ink:#0f1722; --muted:#5a6470; --rule:#cfd4cb;
+  --sign:#ffcc00; --sign-ink:#0f1722; --board:#121a24; --board-ink:#ffd23f; --board-dim:#7f8a96;
+  --danger:#c2412d; --halo:#ffffff;
+  --display:"Big Shoulders Display", "Arial Narrow", "Roboto Condensed", Impact, sans-serif;
+  --body:"Overpass", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"Overpass Mono", ui-monospace, Menlo, Consolas, monospace;
+  --sheet-h:0px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0a0e13; --panel:#111821; --ink:#e9ece5; --muted:#8c96a2; --rule:#243041;
+  --sign:#ffcc00; --sign-ink:#0f1722; --board:#05080b; --board-ink:#ffd23f; --board-dim:#6c7783;
+  --danger:#ff7a5c; --halo:#0a0e13; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0a0e13; --panel:#111821; --ink:#e9ece5; --muted:#8c96a2; --rule:#243041;
+  --sign:#ffcc00; --sign-ink:#0f1722; --board:#05080b; --board-ink:#ffd23f; --board-dim:#6c7783;
+  --danger:#ff7a5c; --halo:#0a0e13; color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font:14px/1.45 var(--body);display:grid;grid-template-columns:420px 1fr;overflow:hidden;-webkit-tap-highlight-color:transparent}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+button:disabled{opacity:.35;cursor:default}
+:focus-visible{outline:3px solid var(--sign);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ---------- Panel ---------- */
+#panel{background:var(--panel);display:flex;flex-direction:column;min-height:0;min-width:0;border-right:2px solid var(--ink);z-index:1000}
+.grab{display:none}
+
+.plate{background:var(--sign);color:var(--sign-ink);padding:14px 18px 12px;display:grid;gap:8px;position:relative}
+.plate::after{content:"";position:absolute;inset:6px;border:2px solid var(--sign-ink);border-radius:6px;pointer-events:none;opacity:.9}
+.plate-top{display:flex;align-items:center;gap:8px;position:relative;z-index:1}
+.brand{font:900 13px/1 var(--display);letter-spacing:.12em;text-transform:uppercase;background:var(--sign-ink);color:var(--sign);padding:4px 7px 3px;border-radius:3px}
+.plate select{flex:1;min-width:0;background:transparent;border:0;border-bottom:1.5px solid var(--sign-ink);border-radius:0;padding:3px 2px;font:600 13px var(--body);color:var(--sign-ink)}
+.plate select option{color:#0f1722;background:#fff}
+.pbtn{border:1.5px solid var(--sign-ink);background:transparent;color:var(--sign-ink);border-radius:4px;padding:3px 8px;font:700 11.5px var(--body);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.pbtn:hover{background:var(--sign-ink);color:var(--sign)}
+#tripTitle{position:relative;z-index:1;font:800 34px/1 var(--display);text-transform:uppercase;letter-spacing:.01em;border:0;background:none;padding:2px 0 0;width:100%;color:var(--sign-ink)}
+#tripTitle::placeholder{color:var(--sign-ink);opacity:.45}
+#tripTitle:focus{outline:none;text-decoration:underline 2px}
+
+.board{background:var(--board);display:grid;grid-template-columns:repeat(4,1fr);border-bottom:2px solid var(--ink)}
+.cell{padding:9px 10px 8px;display:grid;gap:2px;border-right:1px solid #ffffff14}
+.cell:last-child{border-right:0}
+.cell b{font:600 19px/1 var(--mono);color:var(--board-ink);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.cell span{font:700 9.5px/1.1 var(--body);text-transform:uppercase;letter-spacing:.1em;color:var(--board-dim)}
+
+.findbar{padding:12px 18px 10px;display:grid;gap:8px;border-bottom:1px solid var(--rule)}
+.search{position:relative}
+.search input{width:100%;border:2px solid var(--ink);background:var(--panel);border-radius:6px;padding:9px 12px 8px 36px;font-weight:600}
+.search svg{position:absolute;left:11px;top:50%;width:16px;height:16px;transform:translateY(-50%);color:var(--muted)}
+#results{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--panel);border:2px solid var(--ink);border-radius:6px;box-shadow:0 14px 34px rgb(0 0 0 / .25);z-index:1200;max-height:min(320px,50vh);overflow:auto}
+#results button{display:block;width:100%;text-align:left;background:none;border:0;padding:9px 12px;border-bottom:1px solid var(--rule);font-weight:600}
+#results button:hover,#results button:focus{background:var(--sign);color:var(--sign-ink)}
+#results small{display:block;color:var(--muted);font-size:11.5px;font-weight:400}
+#results button:hover small{color:var(--sign-ink)}
+.hint{font-size:12px;color:var(--muted);margin:0}
+.hint b{color:var(--ink)}
+
+/* Hat şeması */
+#list{flex:1;overflow:auto;padding:14px 18px 28px;min-height:0;overscroll-behavior:contain}
+.station{display:grid;grid-template-columns:40px 1fr auto;gap:10px;align-items:start;position:relative}
+.dot{width:34px;height:34px;margin:2px 3px 0;border-radius:50%;background:var(--panel);border:4px solid var(--ink);display:grid;place-items:center;font:600 12px/1 var(--mono);position:relative;z-index:1}
+.station.end .dot{background:var(--ink);color:var(--panel)}
+.st-body{min-width:0;padding-top:2px}
+.st-name{display:block;width:100%;border:0;background:none;padding:0;font:800 22px/1.05 var(--display);text-transform:uppercase;letter-spacing:.01em}
+.st-note{display:block;width:100%;border:0;background:none;padding:2px 0 0;font-size:12.5px;color:var(--muted)}
+.st-name:focus,.st-note:focus{outline:none;box-shadow:0 2px 0 var(--sign)}
+.tools{display:flex;gap:1px;padding-top:2px}
+.ib{border:0;background:none;width:30px;height:30px;border-radius:5px;display:grid;place-items:center;color:var(--muted);position:relative}
+.ib:hover{background:var(--ink);color:var(--panel)}
+.ib.del:hover{background:var(--danger);color:#fff}
+.ib svg{width:16px;height:16px}
+.ib .cnt{position:absolute;top:1px;right:0;background:var(--sign);color:var(--sign-ink);font:700 9px/1 var(--mono);padding:2px 3px;border-radius:3px}
+.more{display:none}
+
+.media-strip{display:flex;gap:6px;overflow-x:auto;padding:8px 0 2px;scrollbar-width:thin}
+.thumb{position:relative;flex:none;width:58px;height:58px;border-radius:5px;overflow:hidden;background:var(--rule);border:2px solid var(--ink)}
+.thumb img,.thumb video{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .x{position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;border:0;background:#000000b0;color:#fff;display:grid;place-items:center;font-size:12px;line-height:1;padding:0}
+.thumb .vid{position:absolute;left:3px;bottom:3px;background:#000000b0;color:#fff;font:600 9px var(--mono);padding:1px 4px;border-radius:3px}
+.addmedia{flex:none;width:58px;height:58px;border-radius:5px;border:2px dashed var(--muted);display:grid;place-items:center;color:var(--muted);cursor:pointer;font:700 10px/1.2 var(--body);text-align:center;text-transform:uppercase}
+.addmedia:hover{border-color:var(--ink);color:var(--ink)}
+
+.seg{display:grid;grid-template-columns:40px 1fr;gap:10px;position:relative;min-height:54px}
+.rail{position:relative}
+.rail::before{content:"";position:absolute;left:16px;top:-6px;bottom:-6px;width:8px;background:var(--segc);border-radius:2px}
+.seg.dashed .rail::before{background:repeating-linear-gradient(to bottom,var(--segc) 0 7px,transparent 7px 12px)}
+.seg-body{padding:10px 0 12px;display:grid;gap:7px;min-width:0}
+.seg-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.badge{width:28px;height:28px;border-radius:5px;background:var(--segc);color:#fff;display:grid;place-items:center;flex:none}
+.badge svg{width:18px;height:18px}
+.seg select{border:1.5px solid var(--rule);background:var(--panel);border-radius:5px;padding:4px 6px;font:600 12.5px var(--body);max-width:100%}
+.seg .meta{font:400 12px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.editbtn{border:1.5px solid var(--ink);background:none;border-radius:5px;padding:3px 9px;font:700 11px var(--body);text-transform:uppercase;letter-spacing:.04em}
+.editbtn:hover{background:var(--ink);color:var(--panel)}
+.seg.active .seg-body{background:color-mix(in srgb,var(--sign) 22%,transparent);margin-left:-8px;padding-left:8px;border-radius:6px}
+.seg.active .editbtn{background:var(--sign);color:var(--sign-ink);border-color:var(--sign-ink)}
+.edit-help{font-size:12.5px;display:grid;gap:5px}
+.edit-help label{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.warn{color:var(--danger);font-size:12px;font-weight:600}
+.linkbtn{border:0;background:none;padding:0;color:inherit;font-weight:700;text-decoration:underline;font-size:12px}
+.empty{padding:22px 4px;display:grid;gap:8px;justify-items:start}
+.empty h3{margin:0;font:800 24px var(--display);text-transform:uppercase}
+
+.foot{border-top:2px solid var(--ink);padding:10px 18px calc(10px + env(safe-area-inset-bottom,0px));display:flex;flex-wrap:wrap;gap:6px;align-items:center;background:var(--panel)}
+.btn{border:1.5px solid var(--ink);background:var(--panel);border-radius:5px;padding:6px 10px;font:700 11.5px var(--body);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.btn:hover{background:var(--ink);color:var(--panel)}
+.btn[aria-pressed="true"]{background:var(--sign);color:var(--sign-ink);border-color:var(--sign-ink)}
+
+/* ---------- Harita sahnesi ---------- */
+#stage{position:relative;min-width:0;min-height:0;display:grid;place-items:center;background:var(--paper)}
+#frame{position:relative;width:100%;height:100%;overflow:hidden}
+#map{position:absolute;inset:0;background:var(--paper)}
+.leaflet-container{font-family:var(--body)}
+.leaflet-control-zoom a{border-radius:0!important;font-weight:700}
+.leaflet-bar{border:2px solid var(--ink)!important;border-radius:5px!important;overflow:hidden}
+.tilectl select{border:2px solid var(--ink);background:var(--panel);color:var(--ink);border-radius:5px;padding:5px 8px;font:700 11.5px var(--body);text-transform:uppercase;letter-spacing:.03em}
+
+.caption{position:absolute;left:14px;top:14px;z-index:900;background:var(--board);color:#fff;border-radius:6px;padding:9px 14px 10px;box-shadow:0 8px 24px rgb(0 0 0 / .35);max-width:min(380px,calc(100% - 28px));border-left:6px solid var(--capc,var(--sign))}
+.caption .k{font:700 10px/1 var(--body);text-transform:uppercase;letter-spacing:.14em;color:var(--board-ink)}
+.caption .v{font:800 26px/1.02 var(--display);text-transform:uppercase;margin-top:4px}
+.caption .s{font-size:12.5px;color:#c9d1da;margin-top:3px}
+.legend{position:absolute;right:12px;top:58px;z-index:900;background:var(--panel);border:2px solid var(--ink);border-radius:5px;padding:7px 10px;display:grid;gap:5px;font:700 11px var(--body);text-transform:uppercase;letter-spacing:.03em}
+.legend div{display:flex;align-items:center;gap:8px}
+.legend i{width:24px;height:6px;border-radius:2px;background:var(--c)}
+.legend i.d{background:repeating-linear-gradient(90deg,var(--c) 0 6px,transparent 6px 10px)}
+.banner{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:950;background:var(--sign);color:var(--sign-ink);padding:7px 14px;border-radius:5px;font:700 12.5px var(--body);border:2px solid var(--sign-ink);max-width:calc(100% - 28px);text-align:center;box-shadow:0 6px 18px rgb(0 0 0 / .2)}
+.toast{position:absolute;left:50%;bottom:calc(var(--sheet-h) + 90px);transform:translateX(-50%);z-index:1300;background:var(--board);color:#fff;padding:9px 14px;border-radius:6px;font-size:13px;font-weight:600;max-width:calc(100% - 28px);box-shadow:0 8px 24px rgb(0 0 0 / .3)}
+
+/* Oynatıcı: kalkış panosu gibi koyu bant */
+.player{position:absolute;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:960;display:flex;align-items:center;gap:8px;background:var(--board);color:#fff;border-radius:10px;padding:7px;box-shadow:0 10px 30px rgb(0 0 0 / .35);width:min(640px,calc(100% - 28px))}
+.play{width:44px;height:44px;border-radius:8px;border:0;background:var(--sign);color:var(--sign-ink);display:grid;place-items:center;flex:none}
+.play svg{width:20px;height:20px}
+.track{flex:1;min-width:40px;display:grid;gap:4px}
+.track .lbl{font:600 11px/1 var(--mono);color:var(--board-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar{height:5px;background:#ffffff1f;border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--board-ink)}
+.pl{border:1.5px solid #ffffff38;background:none;color:#fff;border-radius:6px;height:36px;padding:0 10px;display:flex;align-items:center;gap:6px;font:700 11px var(--body);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;flex:none}
+.pl svg{width:16px;height:16px;flex:none}
+.pl:hover{border-color:#fff}
+.pl[aria-pressed="true"]{background:var(--board-ink);color:var(--board);border-color:var(--board-ink)}
+.pl.rec{color:#ff6b5a;border-color:#ff6b5a66}
+.pl.rec:hover{background:#ff6b5a;color:#fff}
+details.settings{position:relative;flex:none}
+details.settings summary{list-style:none}
+details.settings summary::-webkit-details-marker{display:none}
+.popover{position:absolute;right:0;bottom:calc(100% + 12px);background:var(--panel);color:var(--ink);border:2px solid var(--ink);border-radius:8px;padding:12px 14px;display:grid;gap:10px;width:260px;box-shadow:0 14px 34px rgb(0 0 0 / .3);font-size:13px}
+.popover h4{margin:0;font:800 18px var(--display);text-transform:uppercase}
+.popover label{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px}
+.popover input[type=range]{grid-column:1 / -1;width:100%;accent-color:var(--ink)}
+.popover select{border:1.5px solid var(--rule);background:var(--panel);border-radius:5px;padding:3px 5px;font:600 12.5px var(--body)}
+.popover .v{font:600 12px var(--mono)}
+
+/* Medya sahnesi (videoya girer) */
+.mediastage{position:absolute;inset:0;z-index:940;display:grid;place-items:center;background:rgb(5 8 11 / .55);opacity:0;transition:opacity .35s ease;pointer-events:none}
+.mediastage.on{opacity:1}
+.mcard{max-width:88%;max-height:84%;display:grid;grid-template-rows:minmax(0,1fr) auto;background:var(--board);border-radius:10px;overflow:hidden;box-shadow:0 20px 50px rgb(0 0 0 / .5);transform:scale(.96);transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.mediastage.on .mcard{transform:none}
+.mbox{min-height:0;display:grid;place-items:center;background:#000}
+.mbox img,.mbox video{display:block;max-width:100%;max-height:calc(84vh - 70px);object-fit:contain}
+body.present .mbox img,body.present .mbox video{max-height:70vh}
+.mcap{display:flex;align-items:center;gap:10px;padding:9px 12px 10px;color:#fff}
+.mcap .n{background:var(--sign);color:var(--sign-ink);font:600 13px/1 var(--mono);padding:5px 7px;border-radius:4px}
+.mcap .t{font:800 21px/1.05 var(--display);text-transform:uppercase;min-width:0}
+.mcap .c{margin-left:auto;font:600 11px var(--mono);color:var(--board-dim)}
+
+/* Harita işaretleri */
+.pin{width:30px;height:30px;border-radius:50%;background:var(--halo);color:var(--ink);border:4px solid var(--ink);display:grid;place-items:center;font:600 11px var(--mono);box-shadow:0 2px 8px rgb(0 0 0 / .35)}
+.pin.sel{background:var(--sign);color:var(--sign-ink);border-color:var(--sign-ink)}
+.pin.media::after{content:"";position:absolute;right:-5px;top:-5px;width:11px;height:11px;border-radius:50%;background:var(--sign);border:2px solid var(--ink)}
+.pin{position:relative}
+.via{width:16px;height:16px;border-radius:3px;transform:rotate(45deg);background:var(--sign);border:3px solid var(--ink);box-shadow:0 1px 4px rgb(0 0 0 / .35)}
+.mover{width:46px;height:46px;border-radius:10px;background:var(--sign);border:3px solid #0f1722;display:grid;place-items:center;box-shadow:0 6px 16px rgb(0 0 0 / .45)}
+.mover svg{width:26px;height:26px;color:#0f1722}
+.leaflet-tooltip.stoplabel{background:#0f1722;color:#fff;border:0;border-radius:4px;padding:3px 8px 2px;font:800 15px/1.1 var(--display);text-transform:uppercase;letter-spacing:.02em;box-shadow:0 3px 10px rgb(0 0 0 / .3)}
+.leaflet-tooltip.stoplabel::before{border-top-color:#0f1722}
+
+/* ---------- Sunum / kayıt ---------- */
+body.present{grid-template-columns:0 1fr}
+body.present #panel{display:none}
+body.present #stage{background:#000}
+body.present #frame.r916{width:auto;height:100%;aspect-ratio:9/16;max-width:100%}
+body.present #frame.r169{width:100%;height:auto;aspect-ratio:16/9;max-height:100%}
+body.present #frame.r45{width:auto;height:100%;aspect-ratio:4/5;max-width:100%}
+body.present .leaflet-control-zoom,body.present .tilectl,body.present .legend,body.present .banner{display:none}
+.exit-present{display:none}
+body.present .exit-present{display:block;position:absolute;right:12px;top:12px;z-index:970}
+body.playing.present .player,body.playing.present .exit-present{opacity:0;pointer-events:none}
+body.recording .player,body.recording .exit-present{opacity:0!important;pointer-events:none}
+.titlecard{display:none;position:absolute;left:14px;right:14px;bottom:20px;z-index:930;pointer-events:none;text-align:center}
+body.present .titlecard{display:block}
+body.present:not(.playing) .titlecard{bottom:96px}
+.titlecard div{display:inline-block;font:900 clamp(22px,5vw,40px)/1 var(--display);text-transform:uppercase;background:var(--sign);color:var(--sign-ink);padding:8px 16px 6px;border-radius:6px;outline:2px solid var(--sign-ink);outline-offset:-6px}
+.recdot{display:none;position:absolute;right:14px;bottom:14px;z-index:980;width:12px;height:12px;border-radius:50%;background:#ff3b30;animation:blink 1s infinite}
+body.recording .recdot{display:block}
+@keyframes blink{50%{opacity:.2}}
+
+/* ---------- Telefon ---------- */
+@media (max-width:760px){
+  body{display:block}
+  #stage{position:fixed;inset:0}
+  #panel{position:fixed;left:0;right:0;bottom:0;height:var(--sheet-h);border-right:0;border-top:2px solid var(--ink);border-radius:16px 16px 0 0;overflow:hidden;box-shadow:0 -10px 30px rgb(0 0 0 / .25);transition:height .28s cubic-bezier(.2,.8,.2,1)}
+  #panel.dragging{transition:none}
+  .grab{display:block;position:absolute;top:0;left:0;right:0;height:22px;z-index:5;border:0;background:transparent;touch-action:none}
+  .grab::before{content:"";position:absolute;left:50%;top:7px;width:44px;height:5px;border-radius:3px;background:var(--sign-ink);opacity:.6;transform:translateX(-50%)}
+  .plate{padding:20px 14px 10px;cursor:grab;touch-action:none}
+  #tripTitle{font-size:28px}
+  .findbar{padding:10px 14px 8px}
+  #list{padding:12px 14px 24px}
+  .foot{padding-inline:14px}
+  .legend{display:none}
+  .player{bottom:calc(var(--sheet-h) + 34px);gap:6px;padding:6px}
+  .pl .t{display:none}
+  .pl{padding:0 9px}
+  .play{width:40px;height:40px}
+  .leaflet-bottom{bottom:var(--sheet-h)}
+  .caption{top:12px;left:12px}
+  .banner{top:auto;bottom:calc(var(--sheet-h) + 92px)}
+  .st-name{font-size:20px}
+  .tools .ib.hide-sm{display:none}
+  .more{display:grid}
+  .station.open .tools .ib.hide-sm{display:grid}
+  body.present .player{bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+  body.present .toast{bottom:90px}
+  .popover{right:-60px}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<aside id="panel" aria-label="Rota paneli">
+  <button class="grab" id="grab" aria-label="Paneli büyüt veya küçült"></button>
+  <header class="plate" id="plate">
+    <div class="plate-top">
+      <span class="brand">Rotam</span>
+      <select id="tripSel" aria-label="Gezilerim"></select>
+      <button class="pbtn" id="newTrip">Yeni</button>
+      <button class="pbtn" id="delTrip">Sil</button>
+    </div>
+    <input id="tripTitle" aria-label="Gezi adı" placeholder="Gezine bir ad ver">
+  </header>
+  <div class="board" aria-live="polite">
+    <div class="cell"><b id="stWalk">0</b><span>km yürüyüş</span></div>
+    <div class="cell"><b id="stSteps">0</b><span>adım</span></div>
+    <div class="cell"><b id="stTotal">0</b><span>km toplam</span></div>
+    <div class="cell"><b id="stStops">0</b><span>durak</span></div>
+  </div>
+  <div class="findbar">
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input id="q" type="search" placeholder="Durak ekle: yer, adres, kafe…" autocomplete="off" aria-label="Durak ara">
+      <div id="results" hidden></div>
+    </div>
+    <p class="hint">Bir bölümün yolunu değiştirmek için <b>Yol</b> düğmesine bas, sonra haritada geçtiğin yere dokun.</p>
+  </div>
+  <div id="list"></div>
+  <div class="foot">
+    <button class="btn" id="clickAdd" aria-pressed="false">Haritadan ekle</button>
+    <button class="btn" id="exportBtn">Dışa aktar</button>
+    <label class="btn" for="importFile" style="margin:0">İçe aktar<input id="importFile" type="file" accept=".json,application/json" hidden></label>
+    <button class="btn" id="sampleBtn">Venedik örneği</button>
+    <button class="btn" id="themeBtn">Tema</button>
+  </div>
+</aside>
+
+<main id="stage">
+  <div id="frame">
+    <div id="map" aria-label="Rota haritası"></div>
+    <div class="caption" id="caption" hidden><div class="k" id="capK"></div><div class="v" id="capV"></div><div class="s" id="capS"></div></div>
+    <div class="legend" id="legend"></div>
+    <div class="banner" id="banner" hidden></div>
+    <div class="mediastage" id="mediastage" aria-live="polite"><div class="mcard"><div class="mbox" id="mbox"></div><div class="mcap"><span class="n" id="mN"></span><span class="t" id="mT"></span><span class="c" id="mC"></span></div></div></div>
+    <div class="titlecard"><div id="titleCard"></div></div>
+    <div class="recdot" aria-hidden="true"></div>
+    <div class="player" id="player">
+      <button class="play" id="playBtn" aria-label="Animasyonu oynat"></button>
+      <div class="track"><div class="lbl" id="trackLbl">Hazır</div><div class="bar"><i id="progBar"></i></div></div>
+      <button class="pl" id="mediaBtn" aria-pressed="true" title="Duraklarda medyayı göster"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.6" fill="currentColor"/></svg><span class="t" id="mediaLbl">Medya açık</span></button>
+      <details class="settings" id="settings">
+        <summary class="pl" aria-label="Ayarlar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span class="t">Ayar</span></summary>
+        <div class="popover">
+          <h4>Animasyon</h4>
+          <label>Hareket süresi <span class="v" id="durV">30 sn</span><input type="range" id="dur" min="10" max="120" value="30"></label>
+          <label>Fotoğraf başına <select id="photoSec"><option value="2">2 sn</option><option value="3" selected>3 sn</option><option value="4">4 sn</option><option value="6">6 sn</option></select></label>
+          <label>Video en fazla <select id="vidMax"><option value="8">8 sn</option><option value="15" selected>15 sn</option><option value="30">30 sn</option><option value="999">Sonuna kadar</option></select></label>
+          <label>Video sesi <input type="checkbox" id="vidSound" checked></label>
+          <label>Kamera takip etsin <input type="checkbox" id="follow" checked></label>
+          <label>Sunum kadrajı <select id="ratio"><option value="r916" selected>9:16 Reels</option><option value="r45">4:5 Post</option><option value="r169">16:9 YouTube</option><option value="full">Tam ekran</option></select></label>
+        </div>
+      </details>
+      <button class="pl" id="presentBtn" title="Sunum modu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/></svg><span class="t">Sunum</span></button>
+      <button class="pl rec" id="recBtn" title="Videoyu kaydet"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor"/></svg><span class="t">Kaydet</span></button>
+    </div>
+    <button class="btn exit-present" id="exitPresent">Çık (Esc)</button>
+    <div class="toast" id="toast" hidden></div>
+  </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(() => {
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let uid = 0;
+const newId = p => p + Date.now().toString(36) + (++uid).toString(36);
+const fmtKm = m => (m/1000).toFixed(m < 10000 ? 2 : m < 100000 ? 1 : 0);
+const fmtMin = n => n < 60 ? `${Math.round(n)} dk` : `${Math.floor(n/60)} sa ${Math.round(n%60)} dk`;
+const pad2 = n => String(n).padStart(2, '0');
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const isMobile = () => matchMedia('(max-width:760px)').matches;
+
+/* ---------- Ulaşım şekilleri ---------- */
+const ICONS = {
+  walk:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="2" fill="currentColor"/><path d="M11 21l2-6 3 3v3M13 15l-1-5 4 2 2 3M12 10l-4 2-1 4"/></svg>',
+  bike:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="16" r="3.5"/><circle cx="18.5" cy="16" r="3.5"/><path d="M5.5 16l4-8h6l3 8M9.5 8L12 16h3.5M14 5h3"/></svg>',
+  car:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M3 16v-4l2-5h14l2 5v4z"/><path d="M3 12h18"/><circle cx="7.5" cy="17" r="2" fill="currentColor"/><circle cx="16.5" cy="17" r="2" fill="currentColor"/></svg>',
+  bus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="4" y="3" width="16" height="15" rx="3"/><path d="M4 11h16"/><circle cx="8" cy="20" r="1.5" fill="currentColor"/><circle cx="16" cy="20" r="1.5" fill="currentColor"/></svg>',
+  train:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="5" y="3" width="14" height="13" rx="3"/><path d="M5 10h14M8 21l2-5M16 21l-2-5"/><circle cx="9" cy="13" r="1" fill="currentColor"/><circle cx="15" cy="13" r="1" fill="currentColor"/></svg>',
+  boat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15h18l-2 4H5z" fill="currentColor"/><path d="M6 15V10h10l2 5M9 10V7h4v3"/></svg>',
+  gondola:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 12c5 6 15 6 20-2"/><path d="M15 15L19 3"/></svg>',
+  cable:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M2 4l20 4M12 6v4"/><rect x="6" y="10" width="12" height="10" rx="3"/><path d="M6 15h12"/></svg>',
+  plane:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 15.5v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V8.5l-8 5v2l8-2.5V18l-2 1.5V21l3.5-1 3.5 1v-1.5L13 18v-5z"/></svg>'
+};
+/* route: gerçek yollar (foot/bike/car) · water: yumuşak eğri · air: büyük daire yayı */
+const MODES = {
+  walk:      {ad:'Yürüyüş',          icon:'walk',    color:'#e4572e', dashed:true,  kmh:4.5, route:'foot'},
+  bike:      {ad:'Bisiklet',         icon:'bike',    color:'#2e9e4f', dashed:true,  kmh:15,  route:'bike'},
+  car:       {ad:'Araba',            icon:'car',     color:'#c2185b', kmh:40,  route:'car'},
+  bus:       {ad:'Otobüs',           icon:'bus',     color:'#6b7480', kmh:25,  route:'car'},
+  metro:     {ad:'Metro / Tramvay',  icon:'train',   color:'#e08a00', kmh:30},
+  train:     {ad:'Tren',             icon:'train',   color:'#3b4654', dashed:true, kmh:80},
+  ferry:     {ad:'Vapur / Feribot',  icon:'boat',    color:'#1b74d1', kmh:15,  water:true},
+  vaporetto: {ad:'Vaporetto',        icon:'boat',    color:'#2b8fe6', kmh:12,  water:true},
+  traghetto: {ad:'Traghetto',        icon:'gondola', color:'#0f9e95', dashed:true, kmh:4, water:true},
+  gondola:   {ad:'Gondol / Sandal',  icon:'gondola', color:'#7b4fc9', dashed:true, kmh:4, water:true},
+  taxi:      {ad:'Su taksisi',       icon:'boat',    color:'#0b4f9c', kmh:25,  water:true},
+  cable:     {ad:'Teleferik / People Mover', icon:'cable', color:'#b0418e', kmh:20},
+  plane:     {ad:'Uçak',             icon:'plane',   color:'#6a3fd1', dashed:true, kmh:750, air:true}
+};
+const dashFor = m => m.dashed ? (m.icon === 'walk' ? '1 10' : '10 8') : null;
+const STEPS_PER_KM = 1350;
+
+/* ---------- Venedik örneği ---------- */
+const VENICE = [
+  ['Tronchetto',45.4413,12.3063,'Otobüsten iniş'],
+  ['San Giorgio Maggiore',45.4292,12.3432,'Bucciarati\'nin kulesi'],
+  ['San Zaccaria',45.4337,12.3417,'Vaporetto iskelesi'],
+  ['Arsenale',45.4350,12.3503,'Porta Magna'],
+  ['Libreria Acqua Alta',45.4380,12.3422,'Gondollu kitapçı'],
+  ['Palazzo Bembo',45.4375,12.3364,'JoJo sergisi'],
+  ['Campo Santo Stefano',45.4335,12.3297,''],
+  ['Santa Maria della Salute',45.4309,12.3346,''],
+  ['Zattere',45.4296,12.3263,'Gün batımı'],
+  ['Ponte degli Scalzi',45.4413,12.3222,'Akşam ışıkları'],
+  ['Piazzale Roma',45.4383,12.3187,''],
+  ['Tronchetto',45.4413,12.3063,'Dönüş']
+];
+function sampleTrip(){
+  const stops = VENICE.map(([name, lat, lng, note]) => ({id:newId('s'), name, lat, lng, note, media:[]}));
+  const segs = stops.slice(1).map(() => ({mode:'walk', vias:[], free:false}));
+  segs[0] = {mode:'vaporetto', free:false, vias:[[45.4372,12.3096],[45.4318,12.3150],[45.4298,12.3232],[45.4284,12.3330],[45.4288,12.3398]]};
+  segs[1] = {mode:'vaporetto', free:false, vias:[[45.4318,12.3428]]};
+  return {v:3, id:newId('t'), title:'Venedik, 12 Ekim', stops, segs};
+}
+
+/* ---------- Kayıt: geziler localStorage'da, medya dosyaları IndexedDB'de ---------- */
+const KEY = 'rotam-trips-v1';
+let DB = null;
+try { DB = JSON.parse(localStorage.getItem(KEY)); } catch(e) {}
+if (!DB || !Array.isArray(DB.trips) || !DB.trips.length){
+  let old = null; try { old = JSON.parse(localStorage.getItem('venedik-rotasi-v1')); } catch(e) {}
+  const first = old && Array.isArray(old.stops) ? old : sampleTrip();
+  first.id = first.id || newId('t');
+  DB = {current:first.id, trips:[first]};
+}
+let S = DB.trips.find(t => t.id === DB.current) || DB.trips[0];
+let activeSeg = -1, clickAdd = false, saveTimer = null;
+
+function normalize(t = S){
+  t.stops = t.stops || []; t.segs = t.segs || [];
+  t.stops.forEach(s => { if (!s.id) s.id = newId('s'); s.media = s.media || []; });
+  while (t.segs.length < t.stops.length - 1) t.segs.push({mode:'walk', vias:[], free:false});
+  t.segs.length = Math.max(0, t.stops.length - 1);
+  t.segs.forEach(s => { if (s.mode === 'people') s.mode = 'cable'; if (!MODES[s.mode]) s.mode = 'walk'; s.vias = s.vias || []; });
+}
+normalize();
+function save(){ clearTimeout(saveTimer); saveTimer = setTimeout(() => {
+  try { DB.current = S.id; localStorage.setItem(KEY, JSON.stringify(DB, (k, v) => k === 'loading' ? undefined : v)); }
+  catch(e){ toast('Tarayıcı depolaması dolu ya da kapalı. Rotanı dışa aktararak sakla.'); }
+}, 300); }
+
+const IDB = {
+  db:null,
+  open(){
+    if (this.db) return Promise.resolve(this.db);
+    return new Promise((res, rej) => {
+      let rq; try { rq = indexedDB.open('rotam-media', 1); } catch(e){ rej(e); return; }
+      rq.onupgradeneeded = () => rq.result.createObjectStore('files');
+      rq.onsuccess = () => { this.db = rq.result; res(this.db); };
+      rq.onerror = () => rej(rq.error);
+    });
+  },
+  async tx(mode, fn){
+    const db = await this.open();
+    return new Promise((res, rej) => {
+      const t = db.transaction('files', mode), st = t.objectStore('files'), r = fn(st);
+      t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error);
+    });
+  },
+  put(id, blob){ return this.tx('readwrite', st => st.put(blob, id)); },
+  get(id){ return this.tx('readonly', st => st.get(id)); },
+  del(id){ return this.tx('readwrite', st => st.delete(id)).catch(() => {}); }
+};
+const urlCache = new Map();
+async function mediaURL(id){
+  if (urlCache.has(id)) return urlCache.get(id);
+  try { const b = await IDB.get(id); if (!b) return null; const u = URL.createObjectURL(b); urlCache.set(id, u); return u; }
+  catch(e){ return null; }
+}
+function dropMedia(list){ (list || []).forEach(m => { IDB.del(m.id); const u = urlCache.get(m.id); if (u){ URL.revokeObjectURL(u); urlCache.delete(m.id); } }); }
+
+/* ---------- Harita ---------- */
+const map = L.map('map', {zoomControl:false, attributionControl:false}).setView([45.4365, 12.33], 14);
+L.control.zoom({position:'topright'}).addTo(map);
+L.control.attribution({position:'bottomright', prefix:false}).addTo(map);
+const isDark = () => document.documentElement.dataset.theme === 'dark' ||
+  (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+
+const ESRI = 'Tiles &copy; Esri, HERE, Garmin, &copy; OpenStreetMap';
+const TILE_SOURCES = [
+  {id:'esri', ad:'Sokak', url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', max:19, attr:ESRI,
+   dark:{url:'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', max:16}},
+  {id:'light', ad:'Sade', url:'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', max:16, attr:'Tiles &copy; Esri, HERE, Garmin',
+   dark:{url:'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', max:16}},
+  {id:'sat', ad:'Uydu', url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', max:19, attr:'Tiles &copy; Esri, Maxar, Earthstar Geographics'},
+  {id:'osm', ad:'OpenStreetMap', url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png', max:19, attr:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'},
+  {id:'topo', ad:'Topografik', url:'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', max:17, sub:'abc', attr:'&copy; OpenStreetMap, SRTM | &copy; OpenTopoMap'}
+];
+let tiles, tileIdx = 0, tileErrors = 0, tilePicked = false;
+try { const k = TILE_SOURCES.findIndex(t => t.id === localStorage.getItem('rotam-tiles')); if (k >= 0){ tileIdx = k; tilePicked = true; } } catch(e){}
+function setTiles(){
+  if (tiles) map.removeLayer(tiles);
+  const src = TILE_SOURCES[tileIdx], v = isDark() && src.dark ? {...src, ...src.dark} : src;
+  tileErrors = 0;
+  tiles = L.tileLayer(v.url, {maxZoom:20, maxNativeZoom:v.max, subdomains:src.sub || 'abc', attribution:src.attr});
+  tiles.on('tileerror', () => {
+    if (++tileErrors === 6 && !tilePicked){
+      tileIdx = (tileIdx + 1) % TILE_SOURCES.length; toast(`Harita yüklenmedi, ${TILE_SOURCES[tileIdx].ad} deneniyor`); setTiles(); syncTileSel();
+    }
+  });
+  tiles.on('tileload', () => { tileErrors = 0; });
+  tiles.addTo(map);
+}
+function syncTileSel(){ const s = $('tileSel'); if (s) s.value = TILE_SOURCES[tileIdx].id; }
+const TileCtl = L.Control.extend({options:{position:'topright'}, onAdd(){
+  const d = L.DomUtil.create('div', 'tilectl');
+  d.innerHTML = `<select id="tileSel" aria-label="Harita görünümü">${TILE_SOURCES.map(t => `<option value="${t.id}">${t.ad}</option>`).join('')}</select>`;
+  L.DomEvent.disableClickPropagation(d);
+  d.firstChild.onchange = e => { tileIdx = TILE_SOURCES.findIndex(t => t.id === e.target.value); tilePicked = true;
+    try { localStorage.setItem('rotam-tiles', e.target.value); } catch(err){} setTiles(); };
+  return d;
+}});
+new TileCtl().addTo(map);
+setTiles(); syncTileSel();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { setTiles(); renderAll(); });
+
+const lineLayer = L.layerGroup().addTo(map);
+const pinLayer = L.layerGroup().addTo(map);
+const viaLayer = L.layerGroup().addTo(map);
+const animLayer = L.layerGroup().addTo(map);
+
+/* ---------- Geometri ---------- */
+const R = 6371000, rad = d => d * Math.PI / 180;
+function hav(a, b){
+  const dLat = rad(b[0]-a[0]), dLng = rad(b[1]-a[1]);
+  const h = Math.sin(dLat/2)**2 + Math.cos(rad(a[0]))*Math.cos(rad(b[0]))*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(Math.min(1, h)));
+}
+const pathLen = pts => pts.reduce((s, p, i) => i ? s + hav(pts[i-1], p) : 0, 0);
+function smooth(pts){
+  if (pts.length < 3) return pts;
+  const out = [];
+  for (let i = 0; i < pts.length - 1; i++){
+    const p0 = pts[i-1] || pts[i], p1 = pts[i], p2 = pts[i+1], p3 = pts[i+2] || p2;
+    for (let t = 0; t < 1; t += 0.125){
+      const t2 = t*t, t3 = t2*t;
+      out.push([0,1].map(k => 0.5*((2*p1[k]) + (-p0[k]+p2[k])*t + (2*p0[k]-5*p1[k]+4*p2[k]-p3[k])*t2 + (-p0[k]+3*p1[k]-3*p2[k]+p3[k])*t3)));
+    }
+  }
+  out.push(pts[pts.length-1]);
+  return out;
+}
+function arc(pts){
+  const out = [];
+  for (let i = 0; i < pts.length - 1; i++){
+    const [la1, lo1] = pts[i].map(rad), [la2, lo2] = pts[i+1].map(rad);
+    const d = hav(pts[i], pts[i+1]) / R;
+    if (d < 1e-6){ out.push(pts[i]); continue; }
+    const n = Math.max(8, Math.min(128, Math.round(d * 200)));
+    for (let k = 0; k < n; k++){
+      const f = k / n, A = Math.sin((1-f)*d)/Math.sin(d), B = Math.sin(f*d)/Math.sin(d);
+      const x = A*Math.cos(la1)*Math.cos(lo1) + B*Math.cos(la2)*Math.cos(lo2);
+      const y = A*Math.cos(la1)*Math.sin(lo1) + B*Math.cos(la2)*Math.sin(lo2);
+      const z = A*Math.sin(la1) + B*Math.sin(la2);
+      let lng = Math.atan2(y, x) * 180 / Math.PI;
+      const prev = out[out.length-1];
+      if (prev){ while (lng - prev[1] > 180) lng -= 360; while (lng - prev[1] < -180) lng += 360; }
+      out.push([Math.atan2(z, Math.hypot(x, y)) * 180 / Math.PI, lng]);
+    }
+  }
+  out.push(pts[pts.length-1]);
+  return out;
+}
+const segPts = i => [[S.stops[i].lat, S.stops[i].lng], ...S.segs[i].vias, [S.stops[i+1].lat, S.stops[i+1].lng]];
+
+/* ---------- Yol bulma ---------- */
+const routeCache = new Map();
+async function routeVia(profile, pts){
+  const key = profile + '|' + pts.map(p => p[0].toFixed(5)+','+p[1].toFixed(5)).join(';');
+  if (routeCache.has(key)) return routeCache.get(key);
+  const coords = pts.map(p => p[1].toFixed(6)+','+p[0].toFixed(6)).join(';');
+  const urls = [`https://routing.openstreetmap.de/routed-${profile}/route/v1/${profile === 'car' ? 'driving' : profile}/${coords}?overview=full&geometries=geojson`];
+  if (profile === 'car') urls.push(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
+  for (const u of urls){
+    try {
+      const r = await fetch(u); if (!r.ok) continue;
+      const j = await r.json();
+      if (j.code !== 'Ok' || !j.routes || !j.routes[0]) continue;
+      const res = {geom:j.routes[0].geometry.coordinates.map(c => [c[1], c[0]]), dist:j.routes[0].distance};
+      routeCache.set(key, res); return res;
+    } catch(e){}
+  }
+  return null;
+}
+let computeToken = 0;
+async function computeSeg(i){
+  const seg = S.segs[i]; if (!seg) return;
+  const pts = segPts(i), m = MODES[seg.mode];
+  seg.warn = '';
+  if (m.route && !seg.free){
+    seg.loading = true; renderList();
+    const r = await routeVia(m.route, pts);
+    seg.loading = false;
+    if (r){ seg.geom = r.geom; seg.dist = r.dist; }
+    else { seg.geom = pts; seg.dist = pathLen(pts); seg.warn = 'Yol bulunamadı. Düz çizgi gösteriliyor; internetini kontrol et ya da ara nokta ekle.'; }
+  } else {
+    seg.geom = m.air ? arc(pts) : m.water ? smooth(pts) : pts;
+    seg.dist = pathLen(seg.geom);
+  }
+  seg.min = seg.dist / 1000 / m.kmh * 60;
+}
+async function computeAll(force){
+  const tok = ++computeToken, trip = S;
+  for (let i = 0; i < trip.segs.length; i++){
+    if (tok !== computeToken || trip !== S) return;
+    if (force || !trip.segs[i].geom) await computeSeg(i);
+  }
+  renderAll(); save();
+}
+async function recompute(idxs){
+  for (const i of idxs) if (i >= 0 && i < S.segs.length) await computeSeg(i);
+  renderAll(); save();
+}
+
+/* ---------- Harita çizimi ---------- */
+function drawLines(){
+  lineLayer.clearLayers();
+  const halo = isDark() ? '#0a0e13' : '#ffffff';
+  S.segs.forEach((seg, i) => {
+    if (!seg.geom) return;
+    const m = MODES[seg.mode], act = i === activeSeg, w = m.air ? 4 : 6;
+    L.polyline(seg.geom, {color:halo, weight:w + 6, opacity:.9, interactive:false, lineCap:'round'}).addTo(lineLayer);
+    const pl = L.polyline(seg.geom, {color:m.color, weight:act ? w + 2 : w, opacity:activeSeg < 0 || act ? 1 : .4, dashArray:dashFor(m), lineCap:'round'}).addTo(lineLayer);
+    pl.on('click', ev => { L.DomEvent.stopPropagation(ev); if (activeSeg === i) addVia(i, [ev.latlng.lat, ev.latlng.lng]); else setActive(i); });
+    pl.bindTooltip(`${pad2(i+1)} → ${pad2(i+2)} · ${m.ad}`, {sticky:true});
+  });
+}
+const pinIcon = (n, cls) => L.divIcon({className:'', html:`<div class="pin ${cls||''}">${pad2(n)}</div>`, iconSize:[30,30], iconAnchor:[15,15]});
+function drawPins(){
+  pinLayer.clearLayers();
+  S.stops.forEach((s, i) => {
+    const sel = activeSeg >= 0 && (i === activeSeg || i === activeSeg + 1);
+    const mk = L.marker([s.lat, s.lng], {icon:pinIcon(i+1, (sel ? 'sel ' : '') + (s.media.length ? 'media' : '')), draggable:true, title:s.name, zIndexOffset:sel ? 500 : 0}).addTo(pinLayer);
+    mk.bindTooltip(s.name, {direction:'top', offset:[0,-14], className:'stoplabel'});
+    mk.on('dragend', () => { const ll = mk.getLatLng(); s.lat = ll.lat; s.lng = ll.lng; recompute([i-1, i]); });
+  });
+}
+function drawVias(){
+  viaLayer.clearLayers();
+  if (activeSeg < 0) return;
+  const seg = S.segs[activeSeg];
+  seg.vias.forEach((v, k) => {
+    const mk = L.marker(v, {icon:L.divIcon({className:'', html:'<div class="via"></div>', iconSize:[16,16], iconAnchor:[8,8]}), draggable:true, title:'Ara nokta: sürükle, çift dokunarak sil'}).addTo(viaLayer);
+    mk.on('dragend', () => { const ll = mk.getLatLng(); seg.vias[k] = [ll.lat, ll.lng]; recompute([activeSeg]); });
+    const del = ev => { L.DomEvent.stopPropagation(ev); seg.vias.splice(k, 1); recompute([activeSeg]); };
+    mk.on('dblclick', del); mk.on('contextmenu', del);
+  });
+}
+function drawLegend(){
+  const used = [...new Set(S.segs.map(s => s.mode))];
+  $('legend').hidden = !used.length;
+  $('legend').innerHTML = used.map(k => `<div><i class="${MODES[k].dashed ? 'd' : ''}" style="--c:${MODES[k].color}"></i>${MODES[k].ad}</div>`).join('');
+}
+function renderAll(){ drawLines(); drawPins(); drawVias(); drawLegend(); renderList(); }
+
+/* ---------- Panel ---------- */
+const SVG = {
+  up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 15l6-6 6 6"/></svg>',
+  down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  loc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>',
+  img:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/></svg>',
+  dots:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>'
+};
+const openStops = new Set();
+
+function renderList(){
+  const box = $('list');
+  const fid = document.activeElement && document.activeElement.id;
+  const scroll = box.scrollTop;
+  if (!S.stops.length){
+    box.innerHTML = `<div class="empty"><h3>Henüz durak yok</h3><p class="hint">Yukarıdan bir yer ara ya da <b>Haritadan ekle</b>'ye basıp haritaya dokun. Her yeni durak bir öncekine bağlanır.</p></div>`;
+    renderStats(); return;
+  }
+  let h = '';
+  S.stops.forEach((s, i) => {
+    const last = i === S.stops.length - 1, first = i === 0;
+    h += `<div class="station${first || last ? ' end' : ''}${openStops.has(s.id) ? ' open' : ''}">
+      <div class="dot">${pad2(i+1)}</div>
+      <div class="st-body">
+        <input class="st-name" id="n_${s.id}" data-i="${i}" data-f="name" value="${esc(s.name)}" aria-label="Durak adı">
+        <input class="st-note" id="o_${s.id}" data-i="${i}" data-f="note" value="${esc(s.note)}" placeholder="Not ekle, animasyonda görünür" aria-label="Not">
+        ${s.media.length || openStops.has(s.id) ? `<div class="media-strip">${s.media.map(m => `<div class="thumb" data-mid="${m.id}" data-type="${m.type}">${m.type === 'video' ? '<span class="vid">VİDEO</span>' : ''}<button class="x" data-rm="${m.id}" data-i="${i}" aria-label="Medyayı kaldır">×</button></div>`).join('')}
+          <label class="addmedia">+ Foto<br>Video<input type="file" accept="image/*,video/*" multiple data-add="${i}" hidden></label></div>` : ''}
+      </div>
+      <div class="tools">
+        <label class="ib" title="Foto/video ekle" aria-label="Foto veya video ekle">${SVG.img}${s.media.length ? `<span class="cnt">${s.media.length}</span>` : ''}<input type="file" accept="image/*,video/*" multiple data-add="${i}" hidden></label>
+        <button class="ib hide-sm" data-act="zoom" data-i="${i}" title="Haritada göster" aria-label="Haritada göster">${SVG.loc}</button>
+        <button class="ib hide-sm" data-act="up" data-i="${i}" title="Yukarı" aria-label="Yukarı taşı" ${first ? 'disabled' : ''}>${SVG.up}</button>
+        <button class="ib hide-sm" data-act="down" data-i="${i}" title="Aşağı" aria-label="Aşağı taşı" ${last ? 'disabled' : ''}>${SVG.down}</button>
+        <button class="ib del hide-sm" data-act="del" data-i="${i}" title="Sil" aria-label="Durağı sil">${SVG.x}</button>
+        <button class="ib more" data-act="more" data-i="${i}" aria-label="Diğer işlemler">${SVG.dots}</button>
+      </div></div>`;
+    if (!last){
+      const seg = S.segs[i], m = MODES[seg.mode], act = i === activeSeg;
+      h += `<div class="seg${act ? ' active' : ''}${m.dashed ? ' dashed' : ''}" style="--segc:${m.color}">
+        <div class="rail"></div>
+        <div class="seg-body">
+          <div class="seg-row">
+            <span class="badge">${ICONS[m.icon]}</span>
+            <select data-seg="${i}" id="m_${s.id}" aria-label="Ulaşım şekli">${Object.entries(MODES).map(([k, v]) => `<option value="${k}" ${k === seg.mode ? 'selected' : ''}>${v.ad}</option>`).join('')}</select>
+            <span class="meta">${seg.loading ? 'yol aranıyor…' : seg.dist != null ? `${fmtKm(seg.dist)} km · ${fmtMin(seg.min)}` : ''}</span>
+            <button class="editbtn" data-edit="${i}">${act ? 'Bitti' : 'Yol'}</button>
+          </div>
+          ${seg.warn ? `<div class="warn">${esc(seg.warn)}</div>` : ''}
+          ${act ? `<div class="edit-help">
+            <span>Haritada geçtiğin yere dokun. ${m.route && !seg.free ? 'Rota o noktadan geçecek şekilde gerçek yollar üzerinden yeniden bulunur.' : 'Çizgi o noktadan geçer.'} Sarı noktaları sürükleyebilir, çift dokunarak silebilirsin.</span>
+            ${m.route ? `<label><input type="checkbox" data-free="${i}" ${seg.free ? 'checked' : ''}> Yol bulmayı kapat, noktaları düz bağla</label>` : ''}
+            ${seg.vias.length ? `<span>${seg.vias.length} ara nokta · <button class="linkbtn" data-clear="${i}">Temizle</button></span>` : ''}
+          </div>` : ''}
+        </div></div>`;
+    }
+  });
+  box.innerHTML = h;
+  box.scrollTop = scroll;
+  if (fid){ const el = $(fid); if (el && el !== document.activeElement) el.focus(); }
+  hydrateThumbs();
+  renderStats();
+}
+async function hydrateThumbs(){
+  for (const el of document.querySelectorAll('.thumb[data-mid]')){
+    if (el.querySelector('img,video')) continue;
+    const u = await mediaURL(el.dataset.mid);
+    if (!u){ el.style.opacity = .4; el.title = 'Dosya bu tarayıcıda bulunamadı'; continue; }
+    const media = el.dataset.type === 'video' ? Object.assign(document.createElement('video'), {src:u + '#t=0.5', muted:true, preload:'metadata', playsInline:true}) : Object.assign(document.createElement('img'), {src:u, alt:''});
+    el.prepend(media);
+  }
+}
+function renderStats(){
+  let walk = 0, total = 0;
+  S.segs.forEach(s => { if (s.dist == null) return; total += s.dist; if (s.mode === 'walk') walk += s.dist; });
+  $('stWalk').textContent = fmtKm(walk);
+  $('stSteps').textContent = Math.round(walk/1000*STEPS_PER_KM).toLocaleString('tr-TR');
+  $('stTotal').textContent = total >= 100000 ? Math.round(total/1000).toLocaleString('tr-TR') : fmtKm(total);
+  $('stStops').textContent = S.stops.length;
+  $('titleCard').textContent = S.title || '';
+}
+function renderTrips(){
+  $('tripSel').innerHTML = DB.trips.map(t => `<option value="${t.id}" ${t.id === S.id ? 'selected' : ''}>${esc(t.title || 'Adsız gezi')} · ${t.stops.length} durak</option>`).join('');
+  $('delTrip').disabled = DB.trips.length < 2;
+}
+
+$('list').addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.f){ S.stops[+t.dataset.i][t.dataset.f] = t.value; save(); if (t.dataset.f === 'name') drawPins(); }
+});
+$('list').addEventListener('change', async e => {
+  const t = e.target;
+  if (t.dataset.seg != null){ const i = +t.dataset.seg; S.segs[i].mode = t.value; recompute([i]); }
+  if (t.dataset.free != null){ const i = +t.dataset.free; S.segs[i].free = t.checked; recompute([i]); }
+  if (t.dataset.add != null){
+    const st = S.stops[+t.dataset.add], files = [...t.files]; t.value = '';
+    let n = 0;
+    for (const f of files){
+      if (!/^image\/|^video\//.test(f.type)) continue;
+      const id = newId('m');
+      try { await IDB.put(id, f); st.media.push({id, type:f.type.startsWith('video') ? 'video' : 'image', name:f.name}); n++; }
+      catch(err){ toast('Medya kaydedilemedi. Tarayıcın dosya saklamaya izin vermiyor olabilir.'); break; }
+    }
+    if (n){ openStops.add(st.id); save(); renderList(); drawPins(); toast(`${n} medya “${st.name}” durağına eklendi`); }
+  }
+});
+$('list').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.edit != null){ const i = +b.dataset.edit; setActive(activeSeg === i ? -1 : i); return; }
+  if (b.dataset.clear != null){ S.segs[+b.dataset.clear].vias = []; recompute([+b.dataset.clear]); return; }
+  if (b.dataset.rm){
+    const st = S.stops[+b.dataset.i], k = st.media.findIndex(m => m.id === b.dataset.rm);
+    if (k >= 0){ dropMedia(st.media.splice(k, 1)); save(); renderList(); drawPins(); }
+    return;
+  }
+  const i = +b.dataset.i, act = b.dataset.act;
+  if (act === 'more'){ const id = S.stops[i].id; openStops.has(id) ? openStops.delete(id) : openStops.add(id); renderList(); }
+  if (act === 'zoom'){ map.setView([S.stops[i].lat, S.stops[i].lng], 17); if (isMobile()) setSheet('peek'); }
+  if (act === 'up' || act === 'down'){
+    const j = act === 'up' ? i-1 : i+1;
+    [S.stops[i], S.stops[j]] = [S.stops[j], S.stops[i]];
+    const a = Math.min(i, j); [a-1, a, a+1].forEach(k => { if (S.segs[k]){ S.segs[k].vias = []; S.segs[k].geom = null; } });
+    activeSeg = -1; renderAll(); computeAll(false);
+  }
+  if (act === 'del'){
+    if (b.dataset.armed !== '1'){ b.dataset.armed = '1'; b.style.background = 'var(--danger)'; b.style.color = '#fff'; b.title = 'Silmek için tekrar bas';
+      setTimeout(() => { delete b.dataset.armed; b.style.background = ''; b.style.color = ''; }, 2500); return; }
+    dropMedia(S.stops[i].media);
+    S.stops.splice(i, 1);
+    if (S.segs.length){ const k = Math.min(i, S.segs.length - 1); S.segs.splice(k, 1); if (S.segs[i-1]){ S.segs[i-1].vias = []; S.segs[i-1].geom = null; } }
+    normalize(); activeSeg = -1; renderAll(); computeAll(false);
+  }
+});
+
+function banner(text){ $('banner').hidden = !text; $('banner').textContent = text || ''; }
+function setActive(i){
+  activeSeg = i; setClickAdd(false, true);
+  banner(i >= 0 ? `${pad2(i+1)} → ${pad2(i+2)} düzenleniyor: geçtiğin yere dokun` : '');
+  if (i >= 0){ const g = S.segs[i].geom; if (g) map.fitBounds(L.latLngBounds(g).pad(0.25), {maxZoom:17}); if (isMobile()) setSheet('peek'); }
+  renderAll();
+}
+function addVia(i, p){
+  const seg = S.segs[i], pts = segPts(i);
+  let best = 0, bestCost = Infinity;
+  for (let k = 0; k < pts.length - 1; k++){
+    const c = hav(pts[k], p) + hav(p, pts[k+1]) - hav(pts[k], pts[k+1]);
+    if (c < bestCost){ bestCost = c; best = k; }
+  }
+  seg.vias.splice(best, 0, p); recompute([i]);
+}
+map.on('click', e => {
+  const p = [e.latlng.lat, e.latlng.lng];
+  if (activeSeg >= 0) addVia(activeSeg, p);
+  else if (clickAdd) addStop({name:`Durak ${S.stops.length + 1}`, lat:p[0], lng:p[1], note:''});
+});
+function addStop(st){
+  S.stops.push({...st, id:newId('s'), media:[]});
+  normalize();
+  const i = S.segs.length - 1;
+  if (i > 0) S.segs[i].mode = S.segs[i-1].mode;
+  if (i >= 0) recompute([i]); else renderAll();
+  if (!clickAdd){
+    const prev = S.stops[S.stops.length - 2];
+    if (prev) map.fitBounds(L.latLngBounds([[prev.lat, prev.lng], [st.lat, st.lng]]).pad(0.4), {maxZoom:16});
+    else map.setView([st.lat, st.lng], 15);
+  }
+  renderTrips();
+  toast(`“${st.name}” eklendi`);
+  requestAnimationFrame(() => { $('list').scrollTop = $('list').scrollHeight; });
+}
+function setClickAdd(v, quiet){
+  clickAdd = v; $('clickAdd').setAttribute('aria-pressed', v);
+  if (v){ activeSeg = -1; banner('Haritaya dokun: yeni durak eklenir'); if (isMobile()) setSheet('peek'); }
+  else if (activeSeg < 0 && !quiet) banner('');
+  map.getContainer().style.cursor = v ? 'crosshair' : '';
+}
+$('clickAdd').onclick = () => { setClickAdd(!clickAdd); if (!clickAdd) banner(''); renderAll(); };
+
+/* ---------- Arama (dünya geneli, haritadaki bölge öne çıkar) ---------- */
+let qTimer = null, qCtl = null, lastResults = [];
+$('q').addEventListener('input', () => {
+  clearTimeout(qTimer);
+  const q = $('q').value.trim();
+  if (q.length < 2){ $('results').hidden = true; return; }
+  qTimer = setTimeout(() => search(q), 350);
+});
+$('q').addEventListener('focus', () => { if (isMobile() && sheet !== 'full') setSheet('half'); });
+$('q').addEventListener('keydown', e => {
+  if (e.key === 'Escape') $('results').hidden = true;
+  if (e.key === 'Enter'){ const f = $('results').querySelector('button'); if (f) f.click(); }
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search')) $('results').hidden = true;
+  if (!e.target.closest('#settings')) $('settings').open = false;
+});
+$('results').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const r = lastResults[+b.dataset.k];
+  addStop({name:r.name, lat:r.lat, lng:r.lng, note:''}); $('results').hidden = true; $('q').value = '';
+});
+async function search(q){
+  if (qCtl) qCtl.abort(); qCtl = new AbortController();
+  const c = map.getCenter(), z = Math.round(map.getZoom());
+  let res = [], failed = false;
+  try {
+    const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=${c.lat.toFixed(4)}&lon=${c.lng.toFixed(4)}&zoom=${z}&location_bias_scale=0.3&limit=8`, {signal:qCtl.signal});
+    if (!r.ok) throw new Error('photon');
+    const j = await r.json();
+    res = (j.features || []).map(f => { const p = f.properties;
+      return {name:p.name || [p.street, p.housenumber].filter(Boolean).join(' ') || q, lat:f.geometry.coordinates[1], lng:f.geometry.coordinates[0],
+        sub:[p.street, p.city || p.county, p.country].filter(Boolean).join(' · ')}; });
+  } catch(e){
+    if (e.name === 'AbortError') return;
+    try {
+      const b = map.getBounds();
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&viewbox=${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}&q=${encodeURIComponent(q)}`);
+      const j = await r.json();
+      res = j.map(x => ({name:x.name || x.display_name.split(',')[0], lat:+x.lat, lng:+x.lon, sub:x.display_name.split(',').slice(1, 4).join(',')}));
+    } catch(e2){ failed = true; }
+  }
+  lastResults = res;
+  $('results').innerHTML = failed ? '<div class="hint" style="padding:10px 12px">Arama yapılamadı. İnternetini kontrol et ya da Haritadan ekle ile durak koy.</div>'
+    : res.length ? res.map((r, k) => `<button data-k="${k}">${esc(r.name)}<small>${esc(r.sub)}</small></button>`).join('')
+    : '<div class="hint" style="padding:10px 12px">Sonuç yok. Farklı yaz ya da haritadan ekle.</div>';
+  $('results').hidden = false;
+}
+
+/* ---------- Animasyon ---------- */
+let anim = null;
+const PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg>';
+const PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+$('playBtn').innerHTML = PLAY;
+$('dur').oninput = () => $('durV').textContent = $('dur').value + ' sn';
+let mediaOn = true;
+try { mediaOn = localStorage.getItem('rotam-media') !== 'off'; } catch(e){}
+function syncMediaBtn(){ $('mediaBtn').setAttribute('aria-pressed', mediaOn); $('mediaLbl').textContent = mediaOn ? 'Medya açık' : 'Medya kapalı'; }
+syncMediaBtn();
+$('mediaBtn').onclick = () => { mediaOn = !mediaOn; syncMediaBtn(); try { localStorage.setItem('rotam-media', mediaOn ? 'on' : 'off'); } catch(e){} toast(mediaOn ? 'Duraklarda medya gösterilecek' : 'Medya gizlenecek, sadece rota oynayacak'); };
+
+function buildTimeline(){
+  const segs = S.segs.map((s, i) => {
+    const g = s.geom || segPts(i);
+    const cum = [0]; for (let k = 1; k < g.length; k++) cum.push(cum[k-1] + hav(g[k-1], g[k]));
+    const len = cum[cum.length-1];
+    return {g, cum, len, mode:s.mode, i, zoom: len < 2500 ? 16 : len < 12000 ? 14 : len < 60000 ? 12 : len < 300000 ? 9 : 0};
+  });
+  const w = segs.map(s => Math.min(Math.sqrt(Math.max(s.len, 250)), 110));
+  const total = +$('dur').value * 1000, pause = 700;
+  const moveTotal = Math.max(1500, total - pause * segs.length);
+  const sumW = w.reduce((a, b) => a + b, 0) || 1;
+  let t = 0;
+  segs.forEach((s, k) => { s.t0 = t; s.pauseEnd = t + pause; s.t1 = s.pauseEnd + moveTotal * w[k] / sumW; t = s.t1; });
+  return {segs, end:t + 1200};
+}
+function pointAt(s, frac){
+  const d = s.len * frac; let k = 1;
+  while (k < s.cum.length - 1 && s.cum[k] < d) k++;
+  const a = s.g[k-1], b = s.g[k], span = (s.cum[k] - s.cum[k-1]) || 1, f = Math.min(1, Math.max(0, (d - s.cum[k-1]) / span));
+  return {p:[a[0] + (b[0]-a[0])*f, a[1] + (b[1]-a[1])*f], k};
+}
+const ease = x => x < .5 ? 2*x*x : 1 - (-2*x+2)**2/2;
+const moverIcon = mode => L.divIcon({className:'', html:`<div class="mover">${ICONS[MODES[mode].icon]}</div>`, iconSize:[46,46], iconAnchor:[23,23]});
+function caption(k, v, s, color){ $('caption').hidden = false; $('caption').style.setProperty('--capc', color || 'var(--sign)'); $('capK').textContent = k; $('capV').textContent = v; $('capS').textContent = s || ''; }
+function camFor(s){ if (s.zoom) map.setView(s.g[0], s.zoom, {animate:false}); else map.fitBounds(L.latLngBounds(s.g).pad(0.2), {animate:false}); }
+
+function play(){
+  if (S.stops.length < 2){ toast('Animasyon için en az iki durak gerekli'); return false; }
+  stopAnim(true); setActive(-1); setClickAdd(false);
+  if (isMobile() && !document.body.classList.contains('present')) setSheet('peek');
+  const tl = buildTimeline();
+  lineLayer.eachLayer(l => l.setStyle && l.setStyle({opacity:.15}));
+  pinLayer.eachLayer(l => l.setOpacity(.3));
+  const trails = tl.segs.map(s => { const m = MODES[s.mode];
+    return L.polyline([], {color:m.color, weight:(m.air ? 4 : 6) + 1, dashArray:dashFor(m), lineCap:'round', interactive:false}).addTo(animLayer); });
+  const mover = L.marker([S.stops[0].lat, S.stops[0].lng], {icon:moverIcon(tl.segs[0].mode), interactive:false, zIndexOffset:2000}).addTo(animLayer);
+  anim = {tl, trails, mover, start:performance.now(), elapsed:0, paused:false, holding:false, curMode:tl.segs[0].mode, lastSeg:-1, capSeg:-1, revealed:new Set(), shown:new Set(), camZoom:tl.segs[0].zoom};
+  if ($('follow').checked) camFor(tl.segs[0]); else map.fitBounds(L.latLngBounds(tl.segs.flatMap(s => s.g)).pad(0.12), {animate:false});
+  document.body.classList.add('playing');
+  $('playBtn').innerHTML = PAUSE; $('playBtn').setAttribute('aria-label', 'Duraklat');
+  requestAnimationFrame(tick);
+  return true;
+}
+function revealStop(i){
+  if (anim.revealed.has(i)) return; anim.revealed.add(i);
+  const s = S.stops[i];
+  L.marker([s.lat, s.lng], {icon:pinIcon(i+1), interactive:false, zIndexOffset:1000}).addTo(animLayer)
+    .bindTooltip(s.name, {permanent:true, direction:'top', offset:[0,-14], className:'stoplabel'});
+}
+function hold(stopIdx){
+  const a = anim; a.holding = true; a.shown.add(stopIdx);
+  const hs = performance.now();
+  playMedia(stopIdx).then(() => {
+    if (anim !== a) return;
+    a.start += performance.now() - hs; a.holding = false;
+    if (!a.paused) requestAnimationFrame(tick);
+  });
+}
+const wantsMedia = i => mediaOn && S.stops[i] && S.stops[i].media.length && !anim.shown.has(i);
+function tick(now){
+  const a = anim; if (!a || a.paused || a.holding) return;
+  const t = now - a.start; a.elapsed = t;
+  $('progBar').style.width = Math.min(100, t / a.tl.end * 100) + '%';
+  let pos = null;
+  for (const s of a.tl.segs){
+    if (t < s.t0) break;
+    if (t >= s.t1){ a.trails[s.i].setLatLngs(s.g); revealStop(s.i); continue; }
+    revealStop(s.i);
+    const m = MODES[s.mode];
+    if (a.lastSeg !== s.i){
+      a.lastSeg = s.i; a.camZoom = s.zoom;
+      if ($('follow').checked && s.i > 0 && (s.zoom !== a.tl.segs[s.i-1].zoom || !s.zoom)) camFor(s);
+      const st = S.stops[s.i];
+      caption(`${pad2(s.i+1)} · Durak`, st.name, st.note || `Sırada: ${m.ad} ile ${S.stops[s.i+1].name}`);
+      $('trackLbl').textContent = `${pad2(s.i+1)} ${st.name}`;
+      a.mover.setLatLng(s.g[0]);
+      if (wantsMedia(s.i)){ hold(s.i); return; }
+    }
+    if (t < s.pauseEnd) pos = s.g[0];
+    else {
+      if (a.curMode !== s.mode){ a.curMode = s.mode; a.mover.setIcon(moverIcon(s.mode)); }
+      if (a.capSeg !== s.i){ a.capSeg = s.i; caption(m.ad, `${S.stops[s.i].name} → ${S.stops[s.i+1].name}`, `${fmtKm(s.len)} km`, m.color); }
+      const r = pointAt(s, ease((t - s.pauseEnd) / (s.t1 - s.pauseEnd)));
+      a.trails[s.i].setLatLngs([...s.g.slice(0, r.k), r.p]);
+      pos = r.p;
+    }
+  }
+  const lastSeg = a.tl.segs[a.tl.segs.length - 1];
+  if (t >= lastSeg.t1){
+    const li = S.stops.length - 1; revealStop(li);
+    pos = [S.stops[li].lat, S.stops[li].lng];
+    if (a.capSeg !== 'end'){
+      a.capSeg = 'end';
+      caption('Son durak', S.stops[li].name, `${$('stTotal').textContent} km yol · ${$('stWalk').textContent} km yürüyüş · ${$('stSteps').textContent} adım`);
+      $('trackLbl').textContent = `${pad2(li+1)} ${S.stops[li].name}`;
+      a.mover.setLatLng(pos);
+      if (wantsMedia(li)){ hold(li); return; }
+    }
+  }
+  if (pos){ a.mover.setLatLng(pos); if ($('follow').checked && a.camZoom) map.panTo(pos, {animate:false}); }
+  if (t >= a.tl.end){
+    map.flyToBounds(L.latLngBounds(a.tl.segs.flatMap(s => s.g)).pad(0.1), {duration:1.2});
+    finish(); return;
+  }
+  requestAnimationFrame(tick);
+}
+function finish(){
+  anim.done = true; document.body.classList.remove('playing');
+  $('playBtn').innerHTML = PLAY; $('playBtn').setAttribute('aria-label', 'Tekrar oynat'); $('progBar').style.width = '100%';
+  if (rec) setTimeout(endRecording, 1800);
+}
+function stopAnim(silent){
+  cancelMedia();
+  animLayer.clearLayers(); anim = null; $('caption').hidden = true; $('progBar').style.width = '0'; $('trackLbl').textContent = 'Hazır';
+  document.body.classList.remove('playing'); $('playBtn').innerHTML = PLAY;
+  lineLayer.eachLayer(l => l.setStyle && l.setStyle({opacity:1})); pinLayer.eachLayer(l => l.setOpacity(1));
+  if (!silent) renderAll();
+}
+$('playBtn').onclick = () => {
+  if (anim && !anim.done){
+    if (anim.holding) return;
+    if (!anim.paused){ anim.paused = true; document.body.classList.remove('playing'); $('playBtn').innerHTML = PLAY; return; }
+    anim.paused = false; anim.start = performance.now() - anim.elapsed; document.body.classList.add('playing'); $('playBtn').innerHTML = PAUSE; requestAnimationFrame(tick); return;
+  }
+  play();
+};
+
+/* ---------- Medya oynatma (duraklarda) ---------- */
+let mediaCancel = null;
+function cancelMedia(){ if (mediaCancel) mediaCancel(); }
+async function playMedia(stopIdx){
+  const st = S.stops[stopIdx], items = st.media.slice();
+  let cancelled = false, wake = null;
+  mediaCancel = () => { cancelled = true; if (wake) wake(); };
+  const sleep = ms => new Promise(r => { wake = r; setTimeout(r, ms); });
+  const stage = $('mediastage'), box = $('mbox');
+  $('mN').textContent = pad2(stopIdx + 1); $('mT').textContent = st.name;
+  const photoMs = +$('photoSec').value * 1000, vidMax = +$('vidMax').value * 1000;
+  for (let k = 0; k < items.length && !cancelled; k++){
+    const it = items[k], u = await mediaURL(it.id);
+    if (!u) continue;
+    $('mC').textContent = items.length > 1 ? `${k+1}/${items.length}` : '';
+    box.innerHTML = '';
+    if (it.type === 'video'){
+      const v = Object.assign(document.createElement('video'), {src:u, playsInline:true, muted:!$('vidSound').checked, autoplay:true});
+      box.appendChild(v);
+      stage.classList.add('on');
+      await new Promise(res => {
+        let done = false; const end = () => { if (!done){ done = true; res(); } };
+        wake = end; v.onended = end; v.onerror = end;
+        setTimeout(end, vidMax);
+        v.play().catch(() => { v.muted = true; v.play().catch(end); });
+      });
+      v.pause();
+    } else {
+      const img = new Image(); img.src = u; img.alt = st.name;
+      try { await img.decode(); } catch(e){}
+      box.appendChild(img); stage.classList.add('on');
+      await sleep(photoMs);
+    }
+    if (k < items.length - 1 && !cancelled){ stage.classList.remove('on'); await sleep(250); }
+  }
+  stage.classList.remove('on');
+  await sleep(cancelled ? 0 : 350);
+  box.innerHTML = ''; mediaCancel = null;
+}
+
+/* ---------- Sunum ---------- */
+const presenting = () => document.body.classList.contains('present');
+function present(on){
+  document.body.classList.toggle('present', on);
+  $('frame').className = on && $('ratio').value !== 'full' ? $('ratio').value : '';
+  $('settings').open = false;
+  return new Promise(r => setTimeout(() => {
+    map.invalidateSize();
+    if (on && S.segs.length) map.fitBounds(L.latLngBounds(S.segs.flatMap((s, i) => s.geom || segPts(i))).pad(0.1), {animate:false});
+    r();
+  }, 80));
+}
+$('presentBtn').onclick = () => present(!presenting());
+$('exitPresent').onclick = () => { if (rec) cancelRecording(); present(false); };
+$('ratio').onchange = () => { if (presenting()) present(true); };
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape'){ if (rec) cancelRecording(); else if (presenting()) present(false); $('settings').open = false; }
+  if (e.key === ' ' && presenting() && !rec){ e.preventDefault(); $('playBtn').click(); }
+});
+
+/* ---------- Video kaydı (sekme yakalama) ---------- */
+let rec = null;
+async function startRecording(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia || !window.MediaRecorder){
+    toast('Bu tarayıcı sayfa içinden kayıt yapamıyor. Masaüstünde Chrome veya Edge kullan ya da ekran kaydı al.'); return;
+  }
+  if (S.stops.length < 2){ toast('Kayıt için en az iki durak gerekli'); return; }
+  stopAnim(true);
+  await present(true);
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({video:{frameRate:30}, audio:true, preferCurrentTab:true, selfBrowserSurface:'include', surfaceSwitching:'exclude'});
+  } catch(e){ toast('Kayıt başlatılmadı. Açılan pencerede bu sekmeyi seçip Paylaş\'a basmalısın.'); return; }
+  const track = stream.getVideoTracks()[0];
+  if (window.CropTarget && track.cropTo){ try { await track.cropTo(await CropTarget.fromElement($('frame'))); } catch(e){} }
+  const types = ['video/mp4;codecs=avc1.640028', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+  const mimeType = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+  const chunks = [];
+  const mr = new MediaRecorder(stream, mimeType ? {mimeType, videoBitsPerSecond:10e6} : undefined);
+  mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  rec = {stream, mr, chunks, mimeType, cancelled:false};
+  mr.onstop = () => {
+    stream.getTracks().forEach(t => t.stop());
+    document.body.classList.remove('recording');
+    const r = rec; rec = null;
+    if (!r || r.cancelled || !chunks.length) return;
+    const ext = (mimeType || 'video/webm').includes('mp4') ? 'mp4' : 'webm';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(chunks, {type:mimeType || 'video/webm'}));
+    a.download = `${(S.title || 'rotam').toLowerCase().replace(/[^a-z0-9ığüşöç]+/gi, '-')}.${ext}`;
+    document.body.appendChild(a); a.click(); a.remove();
+    toast(`Video indirildi (.${ext})`);
+  };
+  track.addEventListener('ended', () => { if (rec) cancelRecording(); });
+  document.body.classList.add('recording');
+  await wait(700);
+  mr.start(500);
+  await wait(500);
+  if (!play()) cancelRecording();
+}
+function endRecording(){ if (rec && rec.mr.state !== 'inactive') rec.mr.stop(); }
+function cancelRecording(){ if (!rec) return; rec.cancelled = true; endRecording(); stopAnim(true); toast('Kayıt iptal edildi'); }
+$('recBtn').onclick = () => rec ? cancelRecording() : startRecording();
+
+/* ---------- Geziler, dışa/içe aktarma, tema ---------- */
+function openTrip(t){
+  stopAnim(true); S = t; normalize(); activeSeg = -1; setClickAdd(false); banner('');
+  $('tripTitle').value = S.title || ''; openStops.clear(); renderTrips(); renderAll(); fitAll(); computeAll(false); save();
+}
+$('tripTitle').value = S.title || '';
+$('tripTitle').oninput = e => { S.title = e.target.value; renderStats(); renderTrips(); save(); };
+$('tripSel').onchange = e => { const t = DB.trips.find(x => x.id === e.target.value); if (t) openTrip(t); };
+$('newTrip').onclick = () => {
+  const t = {v:3, id:newId('t'), title:'', stops:[], segs:[]};
+  DB.trips.unshift(t); openTrip(t); if (isMobile()) setSheet('half'); $('tripTitle').focus();
+  toast('Yeni gezi açıldı. Önce bir ad ver, sonra durak ekle.');
+};
+$('delTrip').onclick = () => {
+  const b = $('delTrip'); if (DB.trips.length < 2) return;
+  if (b.dataset.armed !== '1'){ b.dataset.armed = '1'; b.textContent = 'Emin misin?'; setTimeout(() => { delete b.dataset.armed; b.textContent = 'Sil'; }, 3000); return; }
+  delete b.dataset.armed; b.textContent = 'Sil';
+  const name = S.title || 'Adsız gezi';
+  S.stops.forEach(s => dropMedia(s.media));
+  DB.trips = DB.trips.filter(t => t.id !== S.id); openTrip(DB.trips[0]); toast(`“${name}” silindi`);
+};
+$('exportBtn').onclick = () => {
+  const data = JSON.stringify({v:3, title:S.title, stops:S.stops.map(({id, name, lat, lng, note}) => ({id, name, lat, lng, note})), segs:S.segs.map(({mode, vias, free}) => ({mode, vias, free}))}, null, 2);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([data], {type:'application/json'}));
+  a.download = (S.title || 'rotam').toLowerCase().replace(/[^a-z0-9ığüşöç]+/gi, '-') + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  toast(S.stops.some(s => s.media.length) ? 'Rota indirildi. Foto ve videolar dosyaya dahil değil.' : 'Rota dosyası indirildi');
+};
+$('importFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const j = JSON.parse(await f.text());
+    if (!Array.isArray(j.stops) || !Array.isArray(j.segs)) throw 0;
+    j.id = newId('t'); j.stops.forEach(s => { s.id = newId('s'); s.media = []; });
+    DB.trips.unshift(j); openTrip(j); toast('Rota yeni gezi olarak eklendi');
+  } catch(err){ toast('Bu dosya okunamadı. Rotam\'dan dışa aktarılmış bir .json seç.'); }
+  e.target.value = '';
+};
+$('sampleBtn').onclick = () => { const t = sampleTrip(); DB.trips.unshift(t); openTrip(t); toast('Venedik örneği yeni gezi olarak eklendi'); };
+$('themeBtn').onclick = () => { document.documentElement.dataset.theme = isDark() ? 'light' : 'dark'; setTiles(); renderAll(); };
+
+let toastT;
+function toast(msg){ const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 3000); }
+function fitAll(){
+  if (!S.stops.length) return;
+  const pad = isMobile() ? {paddingTopLeft:[20, 20], paddingBottomRight:[20, sheetPx() + 90]} : {padding:[40, 40]};
+  map.fitBounds(L.latLngBounds(S.stops.map(s => [s.lat, s.lng])), {...pad, maxZoom:16});
+}
+
+/* ---------- Telefon: sürüklenebilir alt panel ---------- */
+let sheet = 'half';
+const SHEETS = {peek:() => 172, half:() => Math.round(innerHeight * .5), full:() => innerHeight - 70};
+const sheetPx = () => isMobile() ? SHEETS[sheet]() : 0;
+function setSheet(s){ sheet = s; applySheet(); }
+function applySheet(px){
+  document.documentElement.style.setProperty('--sheet-h', (isMobile() ? (px ?? SHEETS[sheet]()) : 0) + 'px');
+}
+(() => {
+  const panel = $('panel'); let y0 = 0, h0 = 0, moved = false, dragging = false;
+  const down = e => {
+    if (!isMobile() || e.target.closest('input,select,button:not(.grab),label')) return;
+    dragging = true; moved = false; y0 = e.clientY; h0 = SHEETS[sheet](); panel.classList.add('dragging');
+    e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const move = e => {
+    if (!dragging) return;
+    const dy = e.clientY - y0; if (Math.abs(dy) > 4) moved = true;
+    applySheet(Math.max(120, Math.min(innerHeight - 50, h0 - dy)));
+  };
+  const up = e => {
+    if (!dragging) return; dragging = false; panel.classList.remove('dragging');
+    if (!moved){ setSheet(sheet === 'peek' ? 'half' : sheet === 'half' ? 'full' : 'peek'); return; }
+    const h = h0 - (e.clientY - y0);
+    const best = Object.keys(SHEETS).reduce((a, k) => Math.abs(SHEETS[k]() - h) < Math.abs(SHEETS[a]() - h) ? k : a, 'half');
+    setSheet(best);
+  };
+  [$('grab'), $('plate')].forEach(el => { el.addEventListener('pointerdown', down); el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); });
+})();
+addEventListener('resize', () => applySheet());
+
+/* ---------- Başlat ---------- */
+applySheet(); renderTrips(); renderAll(); fitAll(); computeAll(false);
+})();
+</script>
+</body>
+</html>
