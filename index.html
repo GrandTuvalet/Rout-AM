@@ -171,6 +171,16 @@ svg{display:block}
 .edit-help label{display:flex;align-items:center;gap:8px;color:var(--ink-2)}
 .edit-help .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .warn{color:var(--danger);font-size:12px;font-weight:600}
+/* Gizli (hayalet) adımlar */
+.station.ghost .st-body,.station.ghost .tools .icb:not(.eye){opacity:.5}
+.station.ghost .node::before{border-style:dashed;border-color:var(--ink-3);background:transparent}
+.station.ghost .no{letter-spacing:.1em}
+.station.ghost .st-name{font-style:italic;font-weight:600}
+.seg.ghost .seg-body{opacity:.5}
+.seg.ghost .rail::before{opacity:.35}
+.icb.eye[aria-pressed="false"]{color:var(--ink-3)}
+.ghostnote{display:flex;align-items:center;gap:8px;margin:0 0 10px;padding:8px 12px;border-radius:12px;background:var(--fill);font-size:12px;color:var(--ink-2)}
+.ghostnote svg{width:16px;height:16px;flex:none;color:var(--ink-3)}
 .empty{padding:24px 0;display:grid;gap:8px}
 .empty h3{margin:0;font:800 22px var(--display);font-stretch:118%}
 
@@ -217,11 +227,15 @@ details.settings[open] summary{background:var(--fill-2);color:var(--ink)}
 .popover select{border:0;background:var(--fill);border-radius:999px;padding:5px 10px;font:600 12.5px var(--body)}
 .popover .v{font:600 12px var(--mono);color:var(--ink)}
 
-/* Medya sahnesi */
-.mediastage{position:absolute;inset:0;z-index:940;display:grid;place-items:center;background:rgb(8 10 14 / .32);-webkit-backdrop-filter:blur(10px) saturate(1.2);backdrop-filter:blur(10px) saturate(1.2);opacity:0;transition:opacity .4s ease;pointer-events:none}
-.mediastage.on{opacity:1}
-.mcard{max-width:86%;max-height:82%;display:grid;grid-template-rows:minmax(0,1fr) auto;border-radius:24px;overflow:hidden;background:rgb(18 20 24 / .6);border:1px solid rgb(255 255 255 / .14);box-shadow:0 30px 80px rgb(0 0 0 / .45);transform:translateY(14px) scale(.97);transition:transform .55s cubic-bezier(.2,.9,.2,1)}
-.mediastage.on .mcard{transform:none}
+/* Medya sahnesi: arka perde + kart; bitince kart haritadaki baloncuğa küçülür */
+.mediastage{position:absolute;inset:0;z-index:940;display:grid;place-items:center;pointer-events:none;visibility:hidden;transition:visibility 0s linear .5s}
+.mediastage.on{visibility:visible;transition-delay:0s}
+.mediastage.interactive{pointer-events:auto;cursor:pointer}
+.scrim{position:absolute;inset:0;background:rgb(8 10 14 / .32);-webkit-backdrop-filter:blur(10px) saturate(1.2);backdrop-filter:blur(10px) saturate(1.2);opacity:0;transition:opacity .45s ease}
+.mediastage.on .scrim{opacity:1}
+.mediastage.collapsing .scrim{opacity:0}
+.mcard{position:relative;max-width:86%;max-height:82%;display:grid;grid-template-rows:minmax(0,1fr) auto;border-radius:24px;overflow:hidden;background:rgb(18 20 24 / .6);border:1px solid rgb(255 255 255 / .14);box-shadow:0 30px 80px rgb(0 0 0 / .45);opacity:0;transform:translateY(14px) scale(.97);transition:transform .55s cubic-bezier(.2,.9,.2,1),opacity .35s ease;transform-origin:center}
+.mediastage.on .mcard{opacity:1;transform:none}
 .mbox{min-height:0;display:grid;place-items:center;background:#000}
 .mbox img,.mbox video{display:block;max-width:100%;max-height:calc(82vh - 64px);object-fit:contain}
 body.present .mbox img,body.present .mbox video{max-height:68vh}
@@ -235,6 +249,21 @@ body.present .mbox img,body.present .mbox video{max-height:68vh}
 .pin.sel{background:var(--ink);color:var(--on-ink)}
 .pin.media::after{content:"";position:absolute;right:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--ink);border:1.5px solid var(--map-bg)}
 .via{width:14px;height:14px;transform:rotate(45deg);border-radius:3px;background:var(--ink);border:2px solid var(--map-bg);box-shadow:0 1px 5px rgb(0 0 0 / .3)}
+.pin.ghost{background:transparent;border:1.5px dashed var(--ink-3);color:transparent;box-shadow:none;opacity:.75;width:18px;height:18px;margin:3px}
+/* Medya baloncuğu */
+.bub{position:relative;width:46px;height:46px;border-radius:15px;padding:3px;background:var(--glass-strong);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--glass-line);box-shadow:0 8px 22px rgb(0 0 0 / .22);cursor:pointer;animation:bubpop .6s cubic-bezier(.2,1.4,.4,1) both;transition:transform .2s}
+.bub:hover{transform:scale(1.07)}
+.bub::before,.bub::after{content:"";position:absolute;border-radius:50%;background:var(--glass-strong);border:1px solid var(--glass-line);box-shadow:0 2px 6px rgb(0 0 0 / .15)}
+.bub::before{width:8px;height:8px;left:-7px;top:-7px}
+.bub::after{width:4px;height:4px;left:-12px;top:-12px}
+.bub-in{width:100%;height:100%;border-radius:12px;overflow:hidden;background:var(--fill-2)}
+.bub-in img,.bub-in video{width:100%;height:100%;object-fit:cover;display:block}
+.bub-n{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:var(--ink);color:var(--on-ink);font:600 10px/18px var(--mono);text-align:center;padding:0 4px}
+.bub-play{position:absolute;left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:rgb(0 0 0 / .5);display:grid;place-items:center;color:#fff}
+.bub-play svg{width:8px;height:8px}
+.bub.ghost{opacity:.45;animation:none}
+.bub.quiet{animation:none}
+@keyframes bubpop{from{transform:translate(-14px,-14px) scale(.2);opacity:0}}
 .leaflet-tooltip.stoplabel{background:var(--glass-strong);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);color:var(--ink);border:1px solid var(--glass-line);border-radius:999px;padding:4px 11px 4px;font:700 12.5px var(--body);box-shadow:0 6px 18px rgb(0 0 0 / .16);white-space:nowrap}
 .leaflet-tooltip.stoplabel::before{display:none}
 .leaflet-tooltip.linelabel{background:var(--glass-strong);color:var(--ink);border:0;border-radius:10px;font:600 12px var(--body);box-shadow:0 4px 14px rgb(0 0 0 / .15)}
@@ -388,7 +417,7 @@ body.recording .recdot{display:block}
     <div id="map" data-look="sade" aria-label="Rota haritası"></div>
     <div class="caption glass" id="caption" hidden><div class="k"><i></i><span id="capK"></span></div><div class="v" id="capV"></div><div class="s" id="capS"></div></div>
     <div class="banner" id="banner" hidden></div>
-    <div class="mediastage" id="mediastage" aria-live="polite"><div class="mcard"><div class="mbox" id="mbox"></div><div class="mcap"><span class="n" id="mN"></span><span class="t" id="mT"></span><span class="c" id="mC"></span></div></div></div>
+    <div class="mediastage" id="mediastage" aria-live="polite"><div class="scrim"></div><div class="mcard" id="mcard"><div class="mbox" id="mbox"></div><div class="mcap"><span class="n" id="mN"></span><span class="t" id="mT"></span><span class="c" id="mC"></span></div></div></div>
     <div class="titlecard"><div class="glass" id="titleCard"></div></div>
     <div class="recdot" aria-hidden="true"></div>
     <div class="player glass" id="player">
@@ -498,7 +527,7 @@ let S = DB.trips.find(t => t.id === DB.current) || DB.trips[0];
 let activeSeg = -1, clickAdd = false, saveTimer = null;
 function normalize(t = S){
   t.stops = t.stops || []; t.segs = t.segs || [];
-  t.stops.forEach(s => { if (!s.id) s.id = newId('s'); s.media = s.media || []; });
+  t.stops.forEach(s => { if (!s.id) s.id = newId('s'); s.media = s.media || []; s.hidden = !!s.hidden; });
   while (t.segs.length < t.stops.length - 1) t.segs.push({mode:'walk', vias:[], free:false});
   t.segs.length = Math.max(0, t.stops.length - 1);
   t.segs.forEach(s => { if (s.mode === 'people') s.mode = 'cable'; if (!MODES[s.mode]) s.mode = 'walk'; s.vias = s.vias || []; });
@@ -653,6 +682,18 @@ function arc(pts){
 }
 const segPts = i => [[S.stops[i].lat, S.stops[i].lng], ...S.segs[i].vias, [S.stops[i+1].lat, S.stops[i+1].lng]];
 
+/* Gizli adımlar: numara almaz, videoda görünmez. Görünür rota ilk görünür duraktan son görünür durağa kadar;
+   aradaki gizli duraklar rotada "geçiş noktası" olarak kalır. */
+function visRange(){ let f = -1, l = -1; S.stops.forEach((s, i) => { if (!s.hidden){ if (f < 0) f = i; l = i; } }); return [f, l]; }
+function visNums(){ let n = 0; return S.stops.map(s => s.hidden ? null : ++n); }
+const segGhost = i => { const [f, l] = visRange(); return f < 0 || i < f || i >= l; };
+const nextVis = i => { for (let k = i + 1; k < S.stops.length; k++) if (!S.stops[k].hidden) return k; return -1; };
+const prevVis = i => { for (let k = i; k >= 0; k--) if (!S.stops[k].hidden) return k; return -1; };
+const visBounds = () => { const [f, l] = visRange(); const pts = [];
+  if (f >= 0) for (let i = f; i < l; i++) pts.push(...(S.segs[i].geom || segPts(i)));
+  if (!pts.length && f >= 0) pts.push([S.stops[f].lat, S.stops[f].lng]);
+  return L.latLngBounds(pts); };
+
 /* ---------- Yol bulma (OpenStreetMap) ---------- */
 const routeCache = new Map();
 async function routeVia(profile, pts){
@@ -706,11 +747,15 @@ async function recompute(idxs){
 function drawLines(){
   lineLayer.clearLayers();
   const halo = getComputedStyle(document.documentElement).getPropertyValue('--halo').trim() || '#fff';
+  const pres = presenting();
   S.segs.forEach((seg, i) => {
     if (!seg.geom) return;
+    const ghost = segGhost(i);
+    if (ghost && pres) return;
     const m = MODES[seg.mode], act = i === activeSeg, w = m.air ? 3 : 4.5;
-    L.polyline(seg.geom, {color:halo, weight:w + 5, opacity:1, interactive:false, lineCap:'round', lineJoin:'round'}).addTo(lineLayer);
-    L.polyline(seg.geom, {color:mcol(m), weight:act ? w + 2 : w, opacity:activeSeg < 0 || act ? 1 : .35, dashArray:dashFor(m), lineCap:'round', lineJoin:'round', interactive:false}).addTo(lineLayer);
+    const op = ghost ? (act ? .7 : .3) : (activeSeg < 0 || act ? 1 : .35);
+    L.polyline(seg.geom, {color:halo, weight:w + 5, opacity:ghost ? .5 : 1, interactive:false, lineCap:'round', lineJoin:'round', ghost}).addTo(lineLayer);
+    L.polyline(seg.geom, {color:mcol(m), weight:act ? w + 2 : w, opacity:op, dashArray:ghost && !m.dashed ? '2 7' : dashFor(m), lineCap:'round', lineJoin:'round', interactive:false, ghost}).addTo(lineLayer);
     L.polyline(seg.geom, {color:'#000', weight:22, opacity:0, lineCap:'round'}).addTo(lineLayer)
       .on('click', ev => {
         L.DomEvent.stopPropagation(ev);
@@ -718,16 +763,20 @@ function drawLines(){
         if (clickAdd) addStop({name:`Durak ${S.stops.length + 1}`, lat:p[0], lng:p[1], note:''});
         else if (activeSeg === i) addVia(i, p); else setActive(i);
       })
-      .bindTooltip(`${pad2(i+1)} → ${pad2(i+2)} · ${m.ad}`, {sticky:true, className:'linelabel'});
+      .bindTooltip(`${esc(S.stops[i].name)} → ${esc(S.stops[i+1].name)} · ${m.ad}${ghost ? ' (gizli)' : ''}`, {sticky:true, className:'linelabel'});
   });
 }
 const pinIcon = (n, cls) => L.divIcon({className:'', html:`<div class="pin ${cls||''}">${pad2(n)}</div>`, iconSize:[24,24], iconAnchor:[12,12]});
 function drawPins(){
   pinLayer.clearLayers();
+  const nums = visNums(), pres = presenting();
   S.stops.forEach((s, i) => {
+    if (s.hidden && pres) return;
     const sel = activeSeg >= 0 && (i === activeSeg || i === activeSeg + 1);
-    const mk = L.marker([s.lat, s.lng], {icon:pinIcon(i+1, (sel ? 'sel ' : '') + (s.media.length ? 'media' : '')), draggable:true, autoPan:true, title:s.name, zIndexOffset:sel ? 500 : 0}).addTo(pinLayer);
-    mk.bindTooltip(s.name, {direction:'top', offset:[0,-14], className:'stoplabel'});
+    const cls = (s.hidden ? 'ghost ' : '') + (sel ? 'sel ' : '') + (s.media.length && !mediaOn ? 'media' : '');
+    const mk = L.marker([s.lat, s.lng], {icon:s.hidden ? L.divIcon({className:'', html:`<div class="pin ${cls}"></div>`, iconSize:[24,24], iconAnchor:[12,12]}) : pinIcon(nums[i], cls),
+      draggable:true, autoPan:true, title:s.name + (s.hidden ? ' (gizli adım)' : ''), zIndexOffset:sel ? 500 : s.hidden ? -100 : 0, ghost:s.hidden}).addTo(pinLayer);
+    mk.bindTooltip(s.hidden ? `${esc(s.name)} · gizli` : esc(s.name), {direction:'top', offset:[0,-14], className:'stoplabel'});
     mk.on('dragend', () => { const ll = mk.getLatLng(); s.lat = ll.lat; s.lng = ll.lng; recompute([i-1, i]); });
   });
 }
@@ -742,13 +791,42 @@ function drawVias(){
     mk.on('dblclick', del); mk.on('contextmenu', del);
   });
 }
+/* Medya baloncukları: durağın sağ altında küçük bir önizleme */
+const bubbleLayer = L.layerGroup().addTo(map);
+const BUB_OFF = [33, 31];
+function bubbleIcon(st, cls){
+  const m = st.media[0];
+  return L.divIcon({className:'', iconSize:[46,46], iconAnchor:[-10,-8],
+    html:`<div class="bub ${cls || ''}" data-mid="${m.id}" data-type="${m.type}"><div class="bub-in"></div>${m.type === 'video' ? `<span class="bub-play">${'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l12 7-12 7z"/></svg>'}</span>` : ''}${st.media.length > 1 ? `<span class="bub-n">${st.media.length}</span>` : ''}</div>`});
+}
+async function hydrateBubble(mk){
+  const root = mk.getElement(), b = root && root.querySelector('.bub'); if (!b) return;
+  const u = await mediaURL(b.dataset.mid); if (!u) return;
+  const inner = b.querySelector('.bub-in'); if (!inner || inner.firstChild) return;
+  inner.appendChild(b.dataset.type === 'video'
+    ? Object.assign(document.createElement('video'), {src:u + '#t=0.5', muted:true, preload:'metadata', playsInline:true})
+    : Object.assign(document.createElement('img'), {src:u, alt:''}));
+}
+function addBubble(layer, i, cls, interactive){
+  const st = S.stops[i];
+  const mk = L.marker([st.lat, st.lng], {icon:bubbleIcon(st, cls), interactive:!!interactive, keyboard:!!interactive, title:interactive ? `${st.name}: medyayı aç` : '', zIndexOffset:interactive ? 200 : 2500}).addTo(layer);
+  if (interactive) mk.on('click', ev => { L.DomEvent.stopPropagation(ev); previewMedia(i); });
+  hydrateBubble(mk);
+  return mk;
+}
+function drawBubbles(){
+  bubbleLayer.clearLayers();
+  if (!mediaOn || anim) return;
+  const pres = presenting();
+  S.stops.forEach((s, i) => { if (!s.media.length || (s.hidden && pres)) return; addBubble(bubbleLayer, i, 'quiet' + (s.hidden ? ' ghost' : ''), true); });
+}
 function drawLegend(){
   const el = $('legend'); if (!el) return;
-  const used = [...new Set(S.segs.map(s => s.mode))];
+  const used = [...new Set(S.segs.filter((s, i) => !segGhost(i)).map(s => s.mode))];
   el.style.display = used.length ? '' : 'none';
   el.innerHTML = used.map(k => `<div><i class="${MODES[k].dashed ? 'd' : ''}" style="--c:${mcol(MODES[k])}"></i>${MODES[k].ad}</div>`).join('');
 }
-function renderAll(){ drawLines(); drawPins(); drawVias(); drawLegend(); renderList(); }
+function renderAll(){ drawLines(); drawPins(); drawVias(); drawBubbles(); drawLegend(); renderList(); }
 
 /* ---------- Panel ---------- */
 const SVG = {
@@ -759,7 +837,9 @@ const SVG = {
   img:`<svg ${S_}><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M3.5 15.5l4.5-4 4 3.5 3-2.5 5.5 4.5"/><circle cx="15.5" cy="9.5" r="1.3"/></svg>`,
   plus:`<svg ${S_}><path d="M12 5v14M5 12h14"/></svg>`,
   dots:`<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>`,
-  playmini:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l12 7-12 7z"/></svg>'
+  playmini:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l12 7-12 7z"/></svg>',
+  eye:`<svg ${S_}><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.6"/></svg>`,
+  eyeOff:`<svg ${S_}><path d="M3.5 3.5l17 17"/><path d="M10.6 6.1A9.6 9.6 0 0 1 12 6c6 0 9.5 6 9.5 6a16.5 16.5 0 0 1-3.1 3.7M6.3 7.8A16.6 16.6 0 0 0 2.5 12s3.5 6 9.5 6a9 9 0 0 0 4.1-1"/><path d="M9.9 10a2.6 2.6 0 0 0 3.8 3.6"/></svg>`
 };
 const openStops = new Set();
 
@@ -771,19 +851,23 @@ function renderList(){
     box.innerHTML = `<div class="empty"><h3>Henüz durak yok</h3><p class="hint">Yukarıdan bir yer ara ya da <b>Haritadan ekle</b>'ye basıp haritaya dokun. Her yeni durak bir öncekine bağlanır.</p></div>`;
     renderStats(); return;
   }
-  let h = '';
+  const nums = visNums(), [vf, vl] = visRange();
+  const hiddenCount = S.stops.filter(s => s.hidden).length;
+  let h = hiddenCount ? `<div class="ghostnote">${SVG.eyeOff}<span>${hiddenCount} gizli adım. Videoda ve sunumda görünmezler, numara almazlar.</span></div>` : '';
   S.stops.forEach((s, i) => {
     const last = i === S.stops.length - 1, first = i === 0;
     const out = !last ? MODES[S.segs[i].mode] : null;
-    h += `<div class="station${first || last ? ' end' : ''}${out && out.dashed ? ' dashed' : ''}${openStops.has(s.id) ? ' open' : ''}" style="${out ? `--segc:${mcol(out)}` : ''}">
+    const isEnd = !s.hidden && (i === vf || i === vl);
+    h += `<div class="station${isEnd ? ' end' : ''}${s.hidden ? ' ghost' : ''}${out && out.dashed ? ' dashed' : ''}${openStops.has(s.id) ? ' open' : ''}" style="${out ? `--segc:${mcol(out)}` : ''}">
       <div class="node"></div>
       <div class="st-body">
-        <div class="st-top"><span class="no">${pad2(i+1)}</span><input class="st-name" id="n_${s.id}" data-i="${i}" data-f="name" value="${esc(s.name)}" aria-label="Durak adı" enterkeyhint="done"></div>
+        <div class="st-top"><span class="no">${s.hidden ? '··' : pad2(nums[i])}</span><input class="st-name" id="n_${s.id}" data-i="${i}" data-f="name" value="${esc(s.name)}" aria-label="Durak adı" enterkeyhint="done"></div>
         <input class="st-note" id="o_${s.id}" data-i="${i}" data-f="note" value="${esc(s.note)}" placeholder="Not ekle" aria-label="Not" enterkeyhint="done">
         ${s.media.length || openStops.has(s.id) ? `<div class="media-strip">${s.media.map(m => `<div class="thumb" data-mid="${m.id}" data-type="${m.type}">${m.type === 'video' ? `<span class="vid">${SVG.playmini}</span>` : ''}<button class="x" data-rm="${m.id}" data-i="${i}" aria-label="Medyayı kaldır">${SVG.x}</button></div>`).join('')}
           <label class="addmedia" title="Foto veya video ekle">${SVG.plus}<input type="file" accept="image/*,video/*" multiple data-add="${i}" hidden></label></div>` : ''}
       </div>
       <div class="tools">
+        <button class="icb eye" data-act="hide" data-i="${i}" aria-pressed="${!s.hidden}" title="${s.hidden ? 'Gizli adım: videoda görünmez. Göstermek için bas' : 'Videoda görünür. Gizlemek için bas'}" aria-label="${s.hidden ? 'Adımı göster' : 'Adımı gizle'}">${s.hidden ? SVG.eyeOff : SVG.eye}</button>
         <label class="icb" title="Foto veya video ekle" aria-label="Foto veya video ekle">${SVG.img}${s.media.length ? `<span class="cnt">${s.media.length}</span>` : ''}<input type="file" accept="image/*,video/*" multiple data-add="${i}" hidden></label>
         <button class="icb hide-sm" data-act="zoom" data-i="${i}" title="Haritada göster" aria-label="Haritada göster">${SVG.loc}</button>
         <button class="icb hide-sm" data-act="up" data-i="${i}" title="Yukarı taşı" aria-label="Yukarı taşı" ${first ? 'disabled' : ''}>${SVG.up}</button>
@@ -793,7 +877,7 @@ function renderList(){
       </div></div>`;
     if (!last){
       const seg = S.segs[i], m = MODES[seg.mode], act = i === activeSeg;
-      h += `<div class="seg${act ? ' active' : ''}${m.dashed ? ' dashed' : ''}" style="--segc:${mcol(m)}">
+      h += `<div class="seg${act ? ' active' : ''}${m.dashed ? ' dashed' : ''}${segGhost(i) ? ' ghost' : ''}" style="--segc:${mcol(m)}">
         <div class="rail"></div>
         <div class="seg-body">
           <div class="seg-row">
@@ -829,11 +913,11 @@ async function hydrateThumbs(){
 }
 function renderStats(){
   let walk = 0, total = 0;
-  S.segs.forEach(s => { if (s.dist == null) return; total += s.dist; if (s.mode === 'walk') walk += s.dist; });
+  S.segs.forEach((s, i) => { if (s.dist == null || segGhost(i)) return; total += s.dist; if (s.mode === 'walk') walk += s.dist; });
   $('stWalk').textContent = fmtKm(walk);
   $('stSteps').textContent = Math.round(walk/1000*STEPS_PER_KM).toLocaleString('tr-TR');
   $('stTotal').textContent = total >= 100000 ? Math.round(total/1000).toLocaleString('tr-TR') : fmtKm(total);
-  $('stStops').textContent = S.stops.length;
+  $('stStops').textContent = S.stops.filter(s => !s.hidden).length;
   $('titleCard').textContent = S.title || '';
   $('titleCard').hidden = !S.title;
 }
@@ -860,7 +944,7 @@ $('list').addEventListener('change', async e => {
       try { await IDB.put(id, f); st.media.push({id, type:f.type.startsWith('video') ? 'video' : 'image', name:f.name}); n++; }
       catch(err){ toast('Medya kaydedilemedi. Tarayıcın dosya saklamaya izin vermiyor olabilir.'); break; }
     }
-    if (n){ openStops.add(st.id); save(); renderList(); drawPins(); toast(`${n} medya “${st.name}” durağına eklendi`); }
+    if (n){ openStops.add(st.id); save(); renderList(); drawPins(); drawBubbles(); toast(`${n} medya “${st.name}” durağına eklendi`); }
   }
 });
 $('list').addEventListener('click', e => {
@@ -870,10 +954,15 @@ $('list').addEventListener('click', e => {
   if (b.dataset.undo != null){ S.segs[+b.dataset.undo].vias.pop(); recompute([+b.dataset.undo]); return; }
   if (b.dataset.rm){
     const st = S.stops[+b.dataset.i], k = st.media.findIndex(m => m.id === b.dataset.rm);
-    if (k >= 0){ dropMedia(st.media.splice(k, 1)); save(); renderList(); drawPins(); }
+    if (k >= 0){ dropMedia(st.media.splice(k, 1)); save(); renderList(); drawPins(); drawBubbles(); }
     return;
   }
   const i = +b.dataset.i, act = b.dataset.act;
+  if (act === 'hide'){
+    const st = S.stops[i]; st.hidden = !st.hidden; save(); renderAll();
+    toast(st.hidden ? `“${st.name}” gizlendi. Videoda görünmeyecek.` : `“${st.name}” yeniden görünür`);
+    return;
+  }
   if (act === 'more'){ const id = S.stops[i].id; openStops.has(id) ? openStops.delete(id) : openStops.add(id); renderList(); }
   if (act === 'zoom'){ centerOn([S.stops[i].lat, S.stops[i].lng], 17); if (isMobile()) setSheet('peek'); }
   if (act === 'up' || act === 'down'){
@@ -894,7 +983,7 @@ $('list').addEventListener('click', e => {
 function banner(text){ $('banner').hidden = !text; $('banner').textContent = text || ''; }
 function setActive(i){
   activeSeg = i; setClickAdd(false, true);
-  banner(i >= 0 ? `${pad2(i+1)} → ${pad2(i+2)}: geçtiğin yere dokun` : '');
+  banner(i >= 0 ? `${S.stops[i].name} → ${S.stops[i+1].name}: geçtiğin yere dokun` : '');
   if (i >= 0){ if (isMobile()) setSheet('peek'); const g = S.segs[i].geom; if (g) fitTo(L.latLngBounds(g)); }
   renderAll();
 }
@@ -997,22 +1086,24 @@ let mediaOn = true;
 try { mediaOn = localStorage.getItem('rotam-media') !== 'off'; } catch(e){}
 function syncMediaBtn(){ $('mediaBtn').setAttribute('aria-pressed', mediaOn); $('mediaLbl').textContent = mediaOn ? 'Medya açık' : 'Medya kapalı'; }
 syncMediaBtn();
-$('mediaBtn').onclick = () => { mediaOn = !mediaOn; syncMediaBtn(); try { localStorage.setItem('rotam-media', mediaOn ? 'on' : 'off'); } catch(e){} toast(mediaOn ? 'Duraklarda medya gösterilecek' : 'Medya kapalı, sadece rota oynar'); };
+$('mediaBtn').onclick = () => { mediaOn = !mediaOn; syncMediaBtn(); try { localStorage.setItem('rotam-media', mediaOn ? 'on' : 'off'); } catch(e){} if (!anim){ drawPins(); drawBubbles(); } toast(mediaOn ? 'Duraklarda medya ve baloncuklar gösterilecek' : 'Medya kapalı, sadece rota oynar'); };
 
 function buildTimeline(){
-  const segs = S.segs.map((s, i) => {
-    const g = s.geom || segPts(i);
+  const [vf, vl] = visRange();
+  const segs = [];
+  for (let i = vf; i < vl; i++){
+    const s = S.segs[i], g = s.geom || segPts(i);
     const cum = [0]; for (let k = 1; k < g.length; k++) cum.push(cum[k-1] + hav(g[k-1], g[k]));
     const len = cum[cum.length-1];
-    return {g, cum, len, mode:s.mode, i, zoom: len < 2500 ? 16.5 : len < 12000 ? 14.5 : len < 60000 ? 12 : len < 300000 ? 9 : 0};
-  });
+    segs.push({g, cum, len, mode:s.mode, i, k:segs.length, vis:!S.stops[i].hidden, zoom: len < 2500 ? 16.5 : len < 12000 ? 14.5 : len < 60000 ? 12 : len < 300000 ? 9 : 0});
+  }
   const w = segs.map(s => Math.min(Math.sqrt(Math.max(s.len, 250)), 110));
   const total = +$('dur').value * 1000, pause = 750;
-  const moveTotal = Math.max(1500, total - pause * segs.length);
+  const moveTotal = Math.max(1500, total - pause * segs.filter(s => s.vis).length);
   const sumW = w.reduce((a, b) => a + b, 0) || 1;
   let t = 0;
-  segs.forEach((s, k) => { s.t0 = t; s.pauseEnd = t + pause; s.t1 = s.pauseEnd + moveTotal * w[k] / sumW; t = s.t1; });
-  return {segs, end:t + 1300};
+  segs.forEach((s, k) => { s.t0 = t; s.pauseEnd = t + (s.vis ? pause : 0); s.t1 = s.pauseEnd + moveTotal * w[k] / sumW; t = s.t1; });
+  return {segs, end:t + 1300, vf, vl};
 }
 function pointAtDist(s, d){
   let k = 1;
@@ -1038,17 +1129,19 @@ function camFor(s){ if (s.zoom) centerOn(s.g[0], s.zoom); else map.fitBounds(L.l
 function moverEl(){ const a = anim; if (!a.mvEl || !a.mvEl.isConnected){ const root = a.mover.getElement(); a.mvEl = root && root.querySelector('.mv'); a.orEl = root && root.querySelector('.mv-orient'); } return a.mvEl; }
 
 function play(){
-  if (S.stops.length < 2){ toast('Animasyon için en az iki durak gerekli'); return false; }
+  const [vf, vl] = visRange();
+  if (vf < 0 || vf === vl){ toast(S.stops.length < 2 ? 'Animasyon için en az iki durak gerekli' : 'Animasyon için en az iki görünür durak gerekli'); return false; }
   stopAnim(true); setActive(-1); setClickAdd(false);
   $('settings').open = false;
   if (isMobile() && !document.body.classList.contains('present')) setSheet('peek');
   const tl = buildTimeline();
-  lineLayer.eachLayer(l => l.setStyle && l.options.opacity > 0 && l.setStyle({opacity:.14}));
-  pinLayer.eachLayer(l => l.setOpacity(.25));
-  const trails = tl.segs.map(s => { const m = MODES[s.mode], walk = m.icon === 'walk';
-    return L.polyline([], {color:mcol(m), weight:walk ? 2 : (m.air ? 3 : 5), opacity:walk ? .28 : 1, dashArray:walk ? null : dashFor(m), lineCap:'round', lineJoin:'round', interactive:false}).addTo(animLayer); });
-  const mover = L.marker([S.stops[0].lat, S.stops[0].lng], {icon:moverIcon(tl.segs[0].mode), interactive:false, keyboard:false, zIndexOffset:3000}).addTo(animLayer);
-  anim = {tl, trails, mover, start:performance.now(), elapsed:0, paused:false, holding:false, curMode:tl.segs[0].mode, lastSeg:-1, capSeg:-1,
+  bubbleLayer.clearLayers();
+  lineLayer.eachLayer(l => l.setStyle && l.setStyle({opacity:l.options.ghost || l.options.opacity === 0 ? 0 : .14}));
+  pinLayer.eachLayer(l => l.setOpacity(l.options.ghost ? 0 : .25));
+  tl.segs.forEach(s => { const m = MODES[s.mode], walk = m.icon === 'walk';
+    s.trail = L.polyline([], {color:mcol(m), weight:walk ? 2 : (m.air ? 3 : 5), opacity:walk ? .28 : 1, dashArray:walk ? null : dashFor(m), lineCap:'round', lineJoin:'round', interactive:false}).addTo(animLayer); });
+  const mover = L.marker([S.stops[vf].lat, S.stops[vf].lng], {icon:moverIcon(tl.segs[0].mode), interactive:false, keyboard:false, zIndexOffset:3000}).addTo(animLayer);
+  anim = {tl, mover, start:performance.now(), elapsed:0, paused:false, holding:false, curMode:tl.segs[0].mode, lastSeg:-1, capSeg:-1,
           revealed:new Set(), shown:new Set(), camZoom:tl.segs[0].zoom, prevLP:null, mirror:false, heading:0, foot:null, lastFx:0};
   if ($('follow').checked) camFor(tl.segs[0]); else fitTo(L.latLngBounds(tl.segs.flatMap(s => s.g)), {animate:false});
   document.body.classList.add('playing');
@@ -1059,21 +1152,23 @@ function play(){
 function revealStop(i){
   if (anim.revealed.has(i)) return; anim.revealed.add(i);
   const s = S.stops[i];
-  L.marker([s.lat, s.lng], {icon:pinIcon(i+1, 'sel'), interactive:false, keyboard:false, zIndexOffset:1000}).addTo(animLayer)
+  if (s.hidden) return;
+  L.marker([s.lat, s.lng], {icon:pinIcon(visNums()[i], 'sel'), interactive:false, keyboard:false, zIndexOffset:1000}).addTo(animLayer)
     .bindTooltip(s.name, {permanent:true, direction:'top', offset:[0,-14], className:'stoplabel'});
   fx('pulse', [s.lat, s.lng], 'var(--ink)', 1300);
 }
 function hold(stopIdx){
   const a = anim; a.holding = true; a.shown.add(stopIdx);
   const el = moverEl(); if (el) el.classList.add('idle');
-  const hs = performance.now();
-  playMedia(stopIdx).then(() => {
+  const hs = performance.now(), st = S.stops[stopIdx];
+  playMedia(stopIdx, {collapseTo:[st.lat, st.lng]}).then(done => {
     if (anim !== a) return;
+    if (done) addBubble(animLayer, stopIdx, '', false);
     a.start += performance.now() - hs; a.holding = false;
     if (!a.paused) requestAnimationFrame(tick);
   });
 }
-const wantsMedia = i => mediaOn && S.stops[i] && S.stops[i].media.length && !anim.shown.has(i);
+const wantsMedia = i => mediaOn && S.stops[i] && !S.stops[i].hidden && S.stops[i].media.length && !anim.shown.has(i);
 
 /* Araç yönü ve efektler */
 function orient(pos, s, frac){
@@ -1119,27 +1214,34 @@ function tick(now){
   const t = now - a.start; a.elapsed = t;
   $('progBar').style.width = Math.min(100, t / a.tl.end * 100) + '%';
   let pos = null, waiting = false;
+  const nums = a.nums || (a.nums = visNums());
   for (const s of a.tl.segs){
     if (t < s.t0) break;
-    if (t >= s.t1){ a.trails[s.i].setLatLngs(s.g); revealStop(s.i); continue; }
+    if (t >= s.t1){ s.trail.setLatLngs(s.g); revealStop(s.i); continue; }
     revealStop(s.i);
     const m = MODES[s.mode];
     if (a.lastSeg !== s.i){
       a.lastSeg = s.i; a.camZoom = s.zoom; a.prevLP = null;
-      if ($('follow').checked && s.i > 0 && (s.zoom !== a.tl.segs[s.i-1].zoom || !s.zoom)) camFor(s);
-      const st = S.stops[s.i];
-      caption(`Durak ${pad2(s.i+1)}`, st.name, st.note || `Sırada ${m.ad.toLowerCase()} ile ${S.stops[s.i+1].name}`);
-      $('trackLbl').textContent = `${pad2(s.i+1)} · ${st.name}`;
+      if ($('follow').checked && s.k > 0 && (s.zoom !== a.tl.segs[s.k-1].zoom || !s.zoom)) camFor(s);
+      if (s.vis){
+        const st = S.stops[s.i], nv = nextVis(s.i);
+        caption(`Durak ${pad2(nums[s.i])}`, st.name, st.note || `Sırada ${m.ad.toLowerCase()} ile ${nv >= 0 ? S.stops[nv].name : S.stops[s.i+1].name}`);
+        $('trackLbl').textContent = `${pad2(nums[s.i])} · ${st.name}`;
+      }
       a.mover.setLatLng(s.g[0]);
       if (wantsMedia(s.i)){ hold(s.i); return; }
     }
     if (t < s.pauseEnd){ pos = s.g[0]; waiting = true; }
     else {
       if (a.curMode !== s.mode){ a.curMode = s.mode; a.mover.setIcon(moverIcon(s.mode)); a.mvEl = null; a.mirror = false; a.heading = 0; }
-      if (a.capSeg !== s.i){ a.capSeg = s.i; caption(m.ad, `${S.stops[s.i].name} → ${S.stops[s.i+1].name}`, `${fmtKm(s.len)} km · yaklaşık ${fmtMin(s.len / 1000 / m.kmh * 60)}`, mcol(m)); }
+      if (a.capSeg !== s.i){
+        a.capSeg = s.i;
+        const from = S.stops[Math.max(0, prevVis(s.i))], nv = nextVis(s.i), to = S.stops[nv >= 0 ? nv : s.i + 1];
+        caption(m.ad, `${from.name} → ${to.name}`, `${fmtKm(s.len)} km · yaklaşık ${fmtMin(s.len / 1000 / m.kmh * 60)}`, mcol(m));
+      }
       const frac = ease((t - s.pauseEnd) / (s.t1 - s.pauseEnd)), d = s.len * frac;
       const r = pointAtDist(s, d);
-      a.trails[s.i].setLatLngs([...s.g.slice(0, r.k), r.p]);
+      s.trail.setLatLngs([...s.g.slice(0, r.k), r.p]);
       pos = r.p;
       orient(pos, s, frac);
       if (m.icon === 'walk') footprints(s, d);
@@ -1148,12 +1250,12 @@ function tick(now){
   }
   const lastSeg = a.tl.segs[a.tl.segs.length - 1];
   if (t >= lastSeg.t1){
-    const li = S.stops.length - 1; revealStop(li);
+    const li = a.tl.vl; revealStop(li);
     pos = [S.stops[li].lat, S.stops[li].lng]; waiting = true;
     if (a.capSeg !== 'end'){
       a.capSeg = 'end';
       caption('Son durak', S.stops[li].name, `${$('stTotal').textContent} km yol · ${$('stWalk').textContent} km yürüyüş · ${$('stSteps').textContent} adım`);
-      $('trackLbl').textContent = `${pad2(li+1)} · ${S.stops[li].name}`;
+      $('trackLbl').textContent = `${pad2(nums[li])} · ${S.stops[li].name}`;
       a.mover.setLatLng(pos);
       if (wantsMedia(li)){ hold(li); return; }
     }
@@ -1176,7 +1278,7 @@ function stopAnim(silent){
   cancelMedia();
   animLayer.clearLayers(); anim = null; $('caption').hidden = true; $('progBar').style.width = '0'; $('trackLbl').textContent = 'Oynatmaya hazır';
   document.body.classList.remove('playing'); $('playBtn').innerHTML = PLAY; $('playBtn').setAttribute('aria-label', 'Animasyonu oynat');
-  if (!silent) renderAll(); else { drawLines(); pinLayer.eachLayer(l => l.setOpacity(1)); }
+  if (!silent) renderAll(); else { drawLines(); drawPins(); drawBubbles(); }
 }
 $('playBtn').onclick = () => {
   if (anim && !anim.done){
@@ -1191,18 +1293,34 @@ $('playBtn').onclick = () => {
 /* ---------- Medya oynatma ---------- */
 let mediaCancel = null;
 function cancelMedia(){ if (mediaCancel) mediaCancel(); }
-async function playMedia(stopIdx){
+let previewing = false;
+async function previewMedia(i){
+  if (anim || previewing) return;
+  previewing = true;
+  const stage = $('mediastage');
+  stage.classList.add('interactive');
+  const skip = () => { if (skipFn) skipFn(); };
+  stage.addEventListener('click', skip);
+  await playMedia(i, {preview:true});
+  stage.removeEventListener('click', skip);
+  stage.classList.remove('interactive');
+  previewing = false;
+}
+let skipFn = null;
+async function playMedia(stopIdx, opts = {}){
   const st = S.stops[stopIdx], items = st.media.slice();
   let cancelled = false, wake = null;
   mediaCancel = () => { cancelled = true; if (wake) wake(); };
+  skipFn = () => { if (wake) wake(); };
   const sleep = ms => new Promise(r => { wake = r; setTimeout(r, ms); });
-  const stage = $('mediastage'), box = $('mbox');
-  $('mN').textContent = pad2(stopIdx + 1); $('mT').textContent = st.name;
+  const stage = $('mediastage'), box = $('mbox'), card = $('mcard');
+  const n = visNums()[stopIdx];
+  $('mN').textContent = n ? pad2(n) : '··'; $('mT').textContent = st.name;
   const photoMs = +$('photoSec').value * 1000, vidMax = +$('vidMax').value * 1000;
   for (let k = 0; k < items.length && !cancelled; k++){
     const it = items[k], u = await mediaURL(it.id);
     if (!u) continue;
-    $('mC').textContent = items.length > 1 ? `${k+1} / ${items.length}` : '';
+    $('mC').textContent = (items.length > 1 ? `${k+1} / ${items.length}` : '') + (opts.preview ? (items.length > 1 ? ' · dokun: sonraki' : ' · dokun: kapat') : '');
     box.innerHTML = '';
     if (it.type === 'video'){
       const v = Object.assign(document.createElement('video'), {src:u, playsInline:true, muted:!$('vidSound').checked, autoplay:true});
@@ -1223,9 +1341,25 @@ async function playMedia(stopIdx){
     }
     if (k < items.length - 1 && !cancelled){ stage.classList.remove('on'); await sleep(300); }
   }
-  stage.classList.remove('on');
-  await sleep(cancelled ? 0 : 420);
-  box.innerHTML = ''; mediaCancel = null;
+  const done = !cancelled;
+  if (done && opts.collapseTo && stage.classList.contains('on') && !RM()){
+    /* Kart, durağın yanındaki baloncuğa doğru küçülür */
+    const fr = $('frame').getBoundingClientRect(), cr = card.getBoundingClientRect();
+    const tp = map.latLngToContainerPoint(opts.collapseTo);
+    const dx = tp.x + BUB_OFF[0] - (cr.left - fr.left + cr.width / 2), dy = tp.y + BUB_OFF[1] - (cr.top - fr.top + cr.height / 2);
+    const sc = Math.max(.04, 46 / Math.max(cr.width, cr.height));
+    stage.classList.add('collapsing');
+    card.style.transition = 'transform .62s cubic-bezier(.65,0,.25,1), opacity .2s linear .45s, border-radius .62s';
+    card.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(${sc.toFixed(3)})`;
+    card.style.opacity = '0';
+    await sleep(640);
+  }
+  stage.classList.remove('on', 'collapsing');
+  await sleep(cancelled ? 0 : (opts.collapseTo ? 80 : 420));
+  card.style.transition = 'none'; card.style.transform = ''; card.style.opacity = '';
+  void card.offsetWidth; card.style.transition = '';
+  box.innerHTML = ''; mediaCancel = null; skipFn = null;
+  return done;
 }
 
 /* ---------- Sunum ---------- */
@@ -1234,9 +1368,10 @@ function present(on){
   document.body.classList.toggle('present', on);
   $('frame').className = on && $('ratio').value !== 'full' ? $('ratio').value : '';
   $('settings').open = false;
+  if (!anim) { drawLines(); drawPins(); drawBubbles(); drawLegend(); }
   return new Promise(r => setTimeout(() => {
     map.invalidateSize({pan:false});
-    if (S.segs.length) fitTo(L.latLngBounds(S.segs.flatMap((s, i) => s.geom || segPts(i))), {animate:false});
+    if (S.segs.length) fitTo(on ? visBounds() : L.latLngBounds(S.segs.flatMap((s, i) => s.geom || segPts(i))), {animate:false});
     r();
   }, 90));
 }
@@ -1317,7 +1452,7 @@ $('delTrip').onclick = () => {
   DB.trips = DB.trips.filter(t => t.id !== S.id); openTrip(DB.trips[0]); toast(`“${name}” silindi`);
 };
 $('exportBtn').onclick = () => {
-  const data = JSON.stringify({v:4, title:S.title, stops:S.stops.map(({id, name, lat, lng, note}) => ({id, name, lat, lng, note})), segs:S.segs.map(({mode, vias, free}) => ({mode, vias, free}))}, null, 2);
+  const data = JSON.stringify({v:4, title:S.title, stops:S.stops.map(({id, name, lat, lng, note, hidden}) => ({id, name, lat, lng, note, hidden:!!hidden})), segs:S.segs.map(({mode, vias, free}) => ({mode, vias, free}))}, null, 2);
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([data], {type:'application/json'}));
   a.download = slug(S.title) + '.json';
