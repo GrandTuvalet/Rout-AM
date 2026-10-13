@@ -1632,7 +1632,8 @@ async function playMedia(stopIdx, opts = {}){
         let done = false; const end = () => { if (!done){ done = true; res(); } };
         wake = end; v.onended = end; v.onerror = end;
         setTimeout(end, vidMax);
-        v.play().catch(() => { v.muted = true; v.play().catch(end); });
+        const tryPlay = () => { try { const pr = v.play(); return pr && pr.catch ? pr : Promise.resolve(); } catch(err){ return Promise.reject(err); } };
+        tryPlay().catch(() => { v.muted = true; tryPlay().catch(end); });
       });
       v.pause();
     } else {
@@ -1766,7 +1767,8 @@ $('exportBtn').onclick = () => {
 $('importFile').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   try {
-    const j = JSON.parse(await f.text());
+    const raw = f.text ? await f.text() : await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsText(f); });
+    const j = JSON.parse(raw);
     if (!Array.isArray(j.stops) || !Array.isArray(j.segs)) throw 0;
     j.id = newId('t'); j.stops.forEach(s => { s.id = newId('s'); s.media = []; if (s.out) delete s.out.to; });
     DB.trips.unshift(j); openTrip(j); toast('Rota yeni gezi olarak eklendi');
