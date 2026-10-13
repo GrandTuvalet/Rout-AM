@@ -171,16 +171,32 @@ svg{display:block}
 .edit-help label{display:flex;align-items:center;gap:8px;color:var(--ink-2)}
 .edit-help .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .warn{color:var(--danger);font-size:12px;font-weight:600}
-/* Gizli (hayalet) adımlar */
-.station.ghost .st-body,.station.ghost .tools .icb:not(.eye){opacity:.5}
-.station.ghost .node::before{border-style:dashed;border-color:var(--ink-3);background:transparent}
-.station.ghost .no{letter-spacing:.1em}
-.station.ghost .st-name{font-style:italic;font-weight:600}
-.seg.ghost .seg-body{opacity:.5}
+/* Gizli adımlar: varsayılan olarak tek ince satıra katlanır */
+.ggroup,.ghead{display:grid;grid-template-columns:22px 1fr;gap:12px}
+.ggroup .rail,.ghead .rail{position:relative}
+.ggroup .rail::before,.ghead .rail::before{content:"";position:absolute;left:10px;top:-2px;bottom:-2px;width:2px;background:repeating-linear-gradient(to bottom,var(--ink-3) 0 2px,transparent 2px 6px);opacity:.45}
+.ggroup.route .rail::before{background:var(--segc);opacity:1}
+.ggroup.route.dashed .rail::before{background:repeating-linear-gradient(to bottom,var(--segc) 0 3px,transparent 3px 7px)}
+.gbtn{display:flex;align-items:center;gap:7px;width:calc(100% + 10px);min-width:0;margin:2px 0 2px -10px;padding:6px 10px;border:0;border-radius:12px;background:transparent;color:var(--ink-3);font:600 11.5px var(--body);text-align:left;white-space:nowrap}
+.gbtn:hover{background:var(--fill);color:var(--ink-2)}
+.gbtn>svg{width:14px;height:14px;flex:none;opacity:.8}
+.gbtn .gm{display:flex;gap:1px;flex:none}
+.gbtn .gm svg{width:14px;height:14px}
+.gbtn .gs{font-weight:400;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.gbtn .chev{margin-left:auto;flex:none;width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2px) rotate(45deg)}
+.gbtn[aria-expanded="true"] .chev{transform:translateY(1px) rotate(-135deg)}
+.station.ghost .node{min-height:34px}
+.station.ghost .node::before{top:10px;left:6px;width:10px;height:10px;border-style:dashed;border-color:var(--ink-3);background:transparent}
+.station.ghost .st-body{opacity:.6;padding-top:3px}
+.station.ghost .st-name{font-size:14px;font-weight:600;font-style:italic;font-stretch:100%}
+.station.ghost .st-note{display:none}
+.station.ghost .tools .icb{width:28px;height:28px;opacity:.7}
+.station.ghost .tools .icb.eye{opacity:1}
+.station.ghost .tools .icb svg{width:15px;height:15px}
+.seg.ghost .seg-body{opacity:.55;padding-top:4px;padding-bottom:6px}
 .seg.ghost .rail::before{opacity:.35}
 .icb.eye[aria-pressed="false"]{color:var(--ink-3)}
-.ghostnote{display:flex;align-items:center;gap:8px;margin:0 0 10px;padding:8px 12px;border-radius:12px;background:var(--fill);font-size:12px;color:var(--ink-2)}
-.ghostnote svg{width:16px;height:16px;flex:none;color:var(--ink-3)}
+.toast button{margin-left:10px;border:0;background:var(--ink);color:var(--on-ink);border-radius:999px;padding:4px 11px;font:600 12px var(--body)}
 .empty{padding:24px 0;display:grid;gap:8px}
 .empty h3{margin:0;font:800 22px var(--display);font-stretch:118%}
 
@@ -693,6 +709,29 @@ const visBounds = () => { const [f, l] = visRange(); const pts = [];
   if (f >= 0) for (let i = f; i < l; i++) pts.push(...(S.segs[i].geom || segPts(i)));
   if (!pts.length && f >= 0) pts.push([S.stops[f].lat, S.stops[f].lng]);
   return L.latLngBounds(pts); };
+/* Ardışık gizli adımlar bir grup oluşturur. lead: baştaki, trail: sondaki, mid: iki görünür durak arası (rota buradan geçer). */
+const openGhosts = new Set();
+function ghostState(){
+  const n = S.stops.length, groups = [], stopG = new Map(), segG = new Map();
+  for (let i = 0; i < n; i++){
+    if (!S.stops[i].hidden) continue;
+    let j = i; while (j + 1 < n && S.stops[j+1].hidden) j++;
+    const before = i - 1, after = j + 1 < n ? j + 1 : -1;
+    const type = before < 0 ? 'lead' : after < 0 ? 'trail' : 'mid';
+    const segs = [];
+    const s0 = type === 'lead' ? i : before, s1 = after < 0 ? j - 1 : j;
+    for (let k = s0; k <= s1; k++) if (k >= 0 && k < S.segs.length) segs.push(k);
+    const g = {h0:i, h1:j, type, segs, key:S.stops[i].id, open:openGhosts.has(S.stops[i].id)};
+    groups.push(g);
+    for (let k = i; k <= j; k++) stopG.set(k, g);
+    segs.forEach(k => segG.set(k, g));
+    i = j;
+  }
+  return {groups, stopG, segG};
+}
+/* Haritada/panelde görünsün mü: gizli adımlar sadece grubu açıkken görünür, sunumda hiç görünmez */
+function ghostShownStop(i, gs){ if (!S.stops[i].hidden) return true; if (presenting()) return false; const g = (gs || ghostState()).stopG.get(i); return !!(g && g.open); }
+function ghostShownSeg(i, gs){ if (!segGhost(i)) return true; if (presenting()) return false; const g = (gs || ghostState()).segG.get(i); return !!(g && g.open); }
 
 /* ---------- Yol bulma (OpenStreetMap) ---------- */
 const routeCache = new Map();
@@ -747,11 +786,11 @@ async function recompute(idxs){
 function drawLines(){
   lineLayer.clearLayers();
   const halo = getComputedStyle(document.documentElement).getPropertyValue('--halo').trim() || '#fff';
-  const pres = presenting();
+  const gs = ghostState();
   S.segs.forEach((seg, i) => {
     if (!seg.geom) return;
     const ghost = segGhost(i);
-    if (ghost && pres) return;
+    if (!ghostShownSeg(i, gs)) return;
     const m = MODES[seg.mode], act = i === activeSeg, w = m.air ? 3 : 4.5;
     const op = ghost ? (act ? .7 : .3) : (activeSeg < 0 || act ? 1 : .35);
     L.polyline(seg.geom, {color:halo, weight:w + 5, opacity:ghost ? .5 : 1, interactive:false, lineCap:'round', lineJoin:'round', ghost}).addTo(lineLayer);
@@ -769,9 +808,9 @@ function drawLines(){
 const pinIcon = (n, cls) => L.divIcon({className:'', html:`<div class="pin ${cls||''}">${pad2(n)}</div>`, iconSize:[24,24], iconAnchor:[12,12]});
 function drawPins(){
   pinLayer.clearLayers();
-  const nums = visNums(), pres = presenting();
+  const nums = visNums(), gs = ghostState();
   S.stops.forEach((s, i) => {
-    if (s.hidden && pres) return;
+    if (!ghostShownStop(i, gs)) return;
     const sel = activeSeg >= 0 && (i === activeSeg || i === activeSeg + 1);
     const cls = (s.hidden ? 'ghost ' : '') + (sel ? 'sel ' : '') + (s.media.length && !mediaOn ? 'media' : '');
     const mk = L.marker([s.lat, s.lng], {icon:s.hidden ? L.divIcon({className:'', html:`<div class="pin ${cls}"></div>`, iconSize:[24,24], iconAnchor:[12,12]}) : pinIcon(nums[i], cls),
@@ -817,8 +856,8 @@ function addBubble(layer, i, cls, interactive){
 function drawBubbles(){
   bubbleLayer.clearLayers();
   if (!mediaOn || anim) return;
-  const pres = presenting();
-  S.stops.forEach((s, i) => { if (!s.media.length || (s.hidden && pres)) return; addBubble(bubbleLayer, i, 'quiet' + (s.hidden ? ' ghost' : ''), true); });
+  const gs = ghostState();
+  S.stops.forEach((s, i) => { if (!s.media.length || !ghostShownStop(i, gs)) return; addBubble(bubbleLayer, i, 'quiet' + (s.hidden ? ' ghost' : ''), true); });
 }
 function drawLegend(){
   const el = $('legend'); if (!el) return;
@@ -851,14 +890,13 @@ function renderList(){
     box.innerHTML = `<div class="empty"><h3>Henüz durak yok</h3><p class="hint">Yukarıdan bir yer ara ya da <b>Haritadan ekle</b>'ye basıp haritaya dokun. Her yeni durak bir öncekine bağlanır.</p></div>`;
     renderStats(); return;
   }
-  const nums = visNums(), [vf, vl] = visRange();
-  const hiddenCount = S.stops.filter(s => s.hidden).length;
-  let h = hiddenCount ? `<div class="ghostnote">${SVG.eyeOff}<span>${hiddenCount} gizli adım. Videoda ve sunumda görünmezler, numara almazlar.</span></div>` : '';
-  S.stops.forEach((s, i) => {
-    const last = i === S.stops.length - 1, first = i === 0;
+  const nums = visNums(), [vf, vl] = visRange(), n = S.stops.length;
+  const gs = ghostState();
+  const stationHTML = i => {
+    const s = S.stops[i], last = i === n - 1, first = i === 0;
     const out = !last ? MODES[S.segs[i].mode] : null;
     const isEnd = !s.hidden && (i === vf || i === vl);
-    h += `<div class="station${isEnd ? ' end' : ''}${s.hidden ? ' ghost' : ''}${out && out.dashed ? ' dashed' : ''}${openStops.has(s.id) ? ' open' : ''}" style="${out ? `--segc:${mcol(out)}` : ''}">
+    return `<div class="station${isEnd ? ' end' : ''}${s.hidden ? ' ghost' : ''}${out && out.dashed ? ' dashed' : ''}${openStops.has(s.id) ? ' open' : ''}" style="${out ? `--segc:${mcol(out)}` : ''}">
       <div class="node"></div>
       <div class="st-body">
         <div class="st-top"><span class="no">${s.hidden ? '··' : pad2(nums[i])}</span><input class="st-name" id="n_${s.id}" data-i="${i}" data-f="name" value="${esc(s.name)}" aria-label="Durak adı" enterkeyhint="done"></div>
@@ -867,33 +905,57 @@ function renderList(){
           <label class="addmedia" title="Foto veya video ekle">${SVG.plus}<input type="file" accept="image/*,video/*" multiple data-add="${i}" hidden></label></div>` : ''}
       </div>
       <div class="tools">
-        <button class="icb eye" data-act="hide" data-i="${i}" aria-pressed="${!s.hidden}" title="${s.hidden ? 'Gizli adım: videoda görünmez. Göstermek için bas' : 'Videoda görünür. Gizlemek için bas'}" aria-label="${s.hidden ? 'Adımı göster' : 'Adımı gizle'}">${s.hidden ? SVG.eyeOff : SVG.eye}</button>
-        <label class="icb" title="Foto veya video ekle" aria-label="Foto veya video ekle">${SVG.img}${s.media.length ? `<span class="cnt">${s.media.length}</span>` : ''}<input type="file" accept="image/*,video/*" multiple data-add="${i}" hidden></label>
+        <button class="icb eye" data-act="hide" data-i="${i}" aria-pressed="${!s.hidden}" title="${s.hidden ? 'Gizli adım. Göstermek için bas' : 'Videoda görünür. Gizlemek için bas'}" aria-label="${s.hidden ? 'Adımı göster' : 'Adımı gizle'}">${s.hidden ? SVG.eyeOff : SVG.eye}</button>
+        ${s.hidden ? '' : `<label class="icb" title="Foto veya video ekle" aria-label="Foto veya video ekle">${SVG.img}${s.media.length ? `<span class="cnt">${s.media.length}</span>` : ''}<input type="file" accept="image/*,video/*" multiple data-add="${i}" hidden></label>`}
         <button class="icb hide-sm" data-act="zoom" data-i="${i}" title="Haritada göster" aria-label="Haritada göster">${SVG.loc}</button>
         <button class="icb hide-sm" data-act="up" data-i="${i}" title="Yukarı taşı" aria-label="Yukarı taşı" ${first ? 'disabled' : ''}>${SVG.up}</button>
         <button class="icb hide-sm" data-act="down" data-i="${i}" title="Aşağı taşı" aria-label="Aşağı taşı" ${last ? 'disabled' : ''}>${SVG.down}</button>
         <button class="icb danger hide-sm" data-act="del" data-i="${i}" title="Durağı sil" aria-label="Durağı sil">${SVG.x}</button>
         <button class="icb more" data-act="more" data-i="${i}" aria-label="Diğer işlemler" aria-expanded="${openStops.has(s.id)}">${SVG.dots}</button>
       </div></div>`;
-    if (!last){
-      const seg = S.segs[i], m = MODES[seg.mode], act = i === activeSeg;
-      h += `<div class="seg${act ? ' active' : ''}${m.dashed ? ' dashed' : ''}${segGhost(i) ? ' ghost' : ''}" style="--segc:${mcol(m)}">
-        <div class="rail"></div>
-        <div class="seg-body">
-          <div class="seg-row">
-            <span class="mode"><span class="ic">${ICONS[m.icon]}</span><select data-seg="${i}" id="m_${s.id}" aria-label="Ulaşım şekli">${Object.entries(MODES).map(([k, v]) => `<option value="${k}" ${k === seg.mode ? 'selected' : ''}>${v.ad}</option>`).join('')}</select></span>
-            <span class="meta">${seg.loading ? 'yol aranıyor…' : seg.dist != null ? `${fmtKm(seg.dist)} km · ${fmtMin(seg.min)}` : ''}</span>
-            <button class="ghost edit" data-edit="${i}" style="margin-left:auto">${act ? 'Bitti' : 'Yol'}</button>
-          </div>
-          ${seg.warn ? `<div class="warn">${esc(seg.warn)}</div>` : ''}
-          ${act ? `<div class="edit-help">
-            <span>Haritada geçtiğin yere dokun. ${m.route && !seg.free ? 'Rota o noktadan geçecek şekilde gerçek yollar üzerinden yeniden bulunur.' : 'Çizgi o noktadan geçer.'} Noktaları sürükleyebilirsin.</span>
-            ${m.route ? `<label><input type="checkbox" data-free="${i}" ${seg.free ? 'checked' : ''}> Yol bulmayı kapat, noktaları düz bağla</label>` : ''}
-            ${seg.vias.length ? `<div class="row"><span class="meta">${seg.vias.length} ara nokta</span><button class="ghost" data-undo="${i}">Sonuncuyu geri al</button><button class="ghost" data-clear="${i}">Temizle</button></div>` : ''}
-          </div>` : ''}
-        </div></div>`;
+  };
+  const segHTML = i => {
+    const seg = S.segs[i], m = MODES[seg.mode], act = i === activeSeg, sid = S.stops[i].id;
+    return `<div class="seg${act ? ' active' : ''}${m.dashed ? ' dashed' : ''}${segGhost(i) ? ' ghost' : ''}" style="--segc:${mcol(m)}">
+      <div class="rail"></div>
+      <div class="seg-body">
+        <div class="seg-row">
+          <span class="mode"><span class="ic">${ICONS[m.icon]}</span><select data-seg="${i}" id="m_${sid}" aria-label="Ulaşım şekli">${Object.entries(MODES).map(([k, v]) => `<option value="${k}" ${k === seg.mode ? 'selected' : ''}>${v.ad}</option>`).join('')}</select></span>
+          <span class="meta">${seg.loading ? 'yol aranıyor…' : seg.dist != null ? `${fmtKm(seg.dist)} km · ${fmtMin(seg.min)}` : ''}</span>
+          <button class="ghost edit" data-edit="${i}" style="margin-left:auto">${act ? 'Bitti' : 'Yol'}</button>
+        </div>
+        ${seg.warn ? `<div class="warn">${esc(seg.warn)}</div>` : ''}
+        ${act ? `<div class="edit-help">
+          <span>Haritada geçtiğin yere dokun. ${m.route && !seg.free ? 'Rota o noktadan geçecek şekilde gerçek yollar üzerinden yeniden bulunur.' : 'Çizgi o noktadan geçer.'} Noktaları sürükleyebilirsin.</span>
+          ${m.route ? `<label><input type="checkbox" data-free="${i}" ${seg.free ? 'checked' : ''}> Yol bulmayı kapat, noktaları düz bağla</label>` : ''}
+          ${seg.vias.length ? `<div class="row"><span class="meta">${seg.vias.length} ara nokta</span><button class="ghost" data-undo="${i}">Sonuncuyu geri al</button><button class="ghost" data-clear="${i}">Temizle</button></div>` : ''}
+        </div>` : ''}
+      </div></div>`;
+  };
+  const groupHTML = g => {
+    const segs = g.segs.map(k => S.segs[k]), cnt = g.h1 - g.h0 + 1;
+    const km = segs.reduce((a, x) => a + (x.dist || 0), 0);
+    const modes = [...new Set(segs.map(x => x.mode))];
+    const route = g.type === 'mid', first = segs[0] ? MODES[segs[0].mode] : null;
+    const sub = route ? `${modes.map(k => MODES[k].ad).join(' → ')} · ${fmtKm(km)} km` : `videoda yok · ${fmtKm(km)} km`;
+    const icons = modes.map(k => `<span title="${MODES[k].ad}">${ICONS[MODES[k].icon]}</span>`).join('');
+    const cls = g.open ? 'ghead' : `ggroup${route ? ' route' : ''}${route && first && first.dashed ? ' dashed' : ''}`;
+    return `<div class="${cls}" style="${route && first && !g.open ? `--segc:${mcol(first)}` : ''}"><div class="rail"></div>
+      <button class="gbtn" data-ghost="${g.key}" aria-expanded="${g.open}" title="${g.open ? 'Gizli adımları katla' : 'Gizli adımları aç ve düzenle'}">${SVG.eyeOff}<span>${cnt} gizli adım</span><span class="gm">${icons}</span><span class="gs">${g.open ? 'katla' : sub}</span><span class="chev"></span></button></div>`;
+  };
+  let h = '';
+  for (let i = 0; i < n; i++){
+    const g = gs.stopG.get(i);
+    if (g && g.type === 'lead' && i === g.h0) h += groupHTML(g);
+    if (g && !g.open) continue;
+    h += stationHTML(i);
+    if (i < n - 1){
+      const sg = gs.segG.get(i);
+      if (sg && sg.type !== 'lead' && i === sg.segs[0]) h += groupHTML(sg);
+      if (sg && !sg.open) continue;
+      h += segHTML(i);
     }
-  });
+  }
   box.innerHTML = h;
   box.scrollTop = scroll;
   if (fid){ const el = $(fid); if (el && el !== document.activeElement) el.focus({preventScroll:true}); }
@@ -949,6 +1011,19 @@ $('list').addEventListener('change', async e => {
 });
 $('list').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.ghost){
+    const key = b.dataset.ghost, opening = !openGhosts.has(key);
+    opening ? openGhosts.add(key) : openGhosts.delete(key);
+    const g = ghostState().groups.find(x => x.key === key);
+    if (!opening && g && g.segs.includes(activeSeg)){ activeSeg = -1; banner(''); }
+    renderAll();
+    if (opening && g){
+      const pts = []; for (let k = g.h0; k <= g.h1; k++) pts.push([S.stops[k].lat, S.stops[k].lng]);
+      g.segs.forEach(k => pts.push(...(S.segs[k].geom || segPts(k))));
+      fitTo(L.latLngBounds(pts), {maxZoom:16});
+    }
+    return;
+  }
   if (b.dataset.edit != null){ const i = +b.dataset.edit; setActive(activeSeg === i ? -1 : i); return; }
   if (b.dataset.clear != null){ S.segs[+b.dataset.clear].vias = []; recompute([+b.dataset.clear]); return; }
   if (b.dataset.undo != null){ S.segs[+b.dataset.undo].vias.pop(); recompute([+b.dataset.undo]); return; }
@@ -959,8 +1034,11 @@ $('list').addEventListener('click', e => {
   }
   const i = +b.dataset.i, act = b.dataset.act;
   if (act === 'hide'){
-    const st = S.stops[i]; st.hidden = !st.hidden; save(); renderAll();
-    toast(st.hidden ? `“${st.name}” gizlendi. Videoda görünmeyecek.` : `“${st.name}” yeniden görünür`);
+    const st = S.stops[i]; st.hidden = !st.hidden;
+    if (st.hidden && activeSeg >= 0 && (activeSeg === i || activeSeg === i - 1)){ activeSeg = -1; banner(''); }
+    save(); renderAll();
+    if (st.hidden) toast(`“${st.name}” gizlendi`, {label:'Geri al', fn:() => { st.hidden = false; save(); renderAll(); }});
+    else toast(`“${st.name}” yeniden görünür`);
     return;
   }
   if (act === 'more'){ const id = S.stops[i].id; openStops.has(id) ? openStops.delete(id) : openStops.add(id); renderList(); }
@@ -982,6 +1060,7 @@ $('list').addEventListener('click', e => {
 
 function banner(text){ $('banner').hidden = !text; $('banner').textContent = text || ''; }
 function setActive(i){
+  if (i >= 0){ const g = ghostState().segG.get(i); if (g && !g.open) openGhosts.add(g.key); }
   activeSeg = i; setClickAdd(false, true);
   banner(i >= 0 ? `${S.stops[i].name} → ${S.stops[i+1].name}: geçtiğin yere dokun` : '');
   if (i >= 0){ if (isMobile()) setSheet('peek'); const g = S.segs[i].geom; if (g) fitTo(L.latLngBounds(g)); }
@@ -1432,7 +1511,7 @@ $('recBtn').onclick = () => rec ? cancelRecording() : startRecording();
 /* ---------- Geziler, dışa/içe aktarma, tema ---------- */
 function openTrip(t){
   stopAnim(true); S = t; normalize(); activeSeg = -1; setClickAdd(false); banner('');
-  $('tripTitle').value = S.title || ''; openStops.clear(); renderTrips(); renderAll(); fitAll(); computeAll(false); save();
+  $('tripTitle').value = S.title || ''; openStops.clear(); openGhosts.clear(); renderTrips(); renderAll(); fitAll(); computeAll(false); save();
 }
 $('tripTitle').value = S.title || '';
 $('tripTitle').oninput = e => { S.title = e.target.value; renderStats(); renderTrips(); save(); };
@@ -1479,8 +1558,16 @@ $('themeBtn').onclick = () => {
 try { const th = localStorage.getItem('rotam-theme'); if (th) document.documentElement.dataset.theme = th; } catch(e){}
 
 let toastT;
-function toast(msg){ const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 3000); }
-function fitAll(){ if (S.stops.length) fitTo(L.latLngBounds(S.stops.map(s => [s.lat, s.lng])), {maxZoom:16, animate:false}); }
+function toast(msg, action){
+  const t = $('toast'); t.textContent = msg; t.hidden = false;
+  if (action){ const b = document.createElement('button'); b.textContent = action.label; b.onclick = () => { t.hidden = true; action.fn(); }; t.appendChild(b); }
+  clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, action ? 5000 : 3000);
+}
+function fitAll(){
+  if (!S.stops.length) return;
+  const gs = ghostState(), pts = S.stops.filter((s, i) => ghostShownStop(i, gs)).map(s => [s.lat, s.lng]);
+  fitTo(L.latLngBounds(pts.length ? pts : S.stops.map(s => [s.lat, s.lng])), {maxZoom:16, animate:false});
+}
 
 /* ---------- Telefon: sürüklenebilir alt panel ---------- */
 let sheet = 'half';
