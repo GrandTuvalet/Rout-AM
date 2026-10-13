@@ -164,9 +164,9 @@ svg{display:block}
 .mode::after{content:"";position:absolute;right:11px;top:50%;width:5px;height:5px;border-right:1.5px solid var(--ink-3);border-bottom:1.5px solid var(--ink-3);transform:translateY(-70%) rotate(45deg);pointer-events:none}
 .mode .sw{width:8px;height:8px;border-radius:50%;background:var(--segc);flex:none}
 .meta{font:400 11.5px var(--mono);color:var(--ink-3);font-variant-numeric:tabular-nums}
-.ghost{border:1px solid var(--hair);background:transparent;border-radius:999px;height:30px;padding:0 12px;font:600 12px var(--body);color:var(--ink-2)}
-.ghost:hover{border-color:var(--ink);color:var(--ink)}
-.seg.active .ghost.edit{background:var(--ink);border-color:var(--ink);color:var(--on-ink)}
+.pbtn{border:1px solid var(--hair);background:transparent;border-radius:999px;height:30px;padding:0 12px;font:600 12px var(--body);color:var(--ink-2);white-space:nowrap;flex:none}
+.pbtn:hover{border-color:var(--ink);color:var(--ink)}
+.seg.active .pbtn.edit{background:var(--ink);border-color:var(--ink);color:var(--on-ink)}
 .edit-help{font-size:12.5px;color:var(--ink-2);display:grid;gap:8px}
 .edit-help label{display:flex;align-items:center;gap:8px;color:var(--ink-2)}
 .edit-help .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
@@ -177,6 +177,11 @@ svg{display:block}
 .ggroup .rail::before,.ghead .rail::before{content:"";position:absolute;left:10px;top:-2px;bottom:-2px;width:2px;background:repeating-linear-gradient(to bottom,var(--ink-3) 0 2px,transparent 2px 6px);opacity:.45}
 .ggroup.route .rail::before{background:var(--segc);opacity:1}
 .ggroup.route.dashed .rail::before{background:repeating-linear-gradient(to bottom,var(--segc) 0 3px,transparent 3px 7px)}
+.gwrap{margin:4px 0 8px -10px;padding:0 0 4px 10px;border-radius:18px;background:var(--fill)}
+.gwrap .ghead .rail::before{top:10px}
+.gwrap .gbtn{margin-top:4px}
+.seg.ghost .mode{height:28px}
+.seg.ghost .pbtn{height:26px}
 .gbtn{display:flex;align-items:center;gap:7px;width:calc(100% + 10px);min-width:0;margin:2px 0 2px -10px;padding:6px 10px;border:0;border-radius:12px;background:transparent;color:var(--ink-3);font:600 11.5px var(--body);text-align:left;white-space:nowrap}
 .gbtn:hover{background:var(--fill);color:var(--ink-2)}
 .gbtn>svg{width:14px;height:14px;flex:none;opacity:.8}
@@ -922,13 +927,13 @@ function renderList(){
         <div class="seg-row">
           <span class="mode"><span class="ic">${ICONS[m.icon]}</span><select data-seg="${i}" id="m_${sid}" aria-label="Ulaşım şekli">${Object.entries(MODES).map(([k, v]) => `<option value="${k}" ${k === seg.mode ? 'selected' : ''}>${v.ad}</option>`).join('')}</select></span>
           <span class="meta">${seg.loading ? 'yol aranıyor…' : seg.dist != null ? `${fmtKm(seg.dist)} km · ${fmtMin(seg.min)}` : ''}</span>
-          <button class="ghost edit" data-edit="${i}" style="margin-left:auto">${act ? 'Bitti' : 'Yol'}</button>
+          <button class="pbtn edit" data-edit="${i}" style="margin-left:auto">${act ? 'Bitti' : 'Yol'}</button>
         </div>
         ${seg.warn ? `<div class="warn">${esc(seg.warn)}</div>` : ''}
         ${act ? `<div class="edit-help">
           <span>Haritada geçtiğin yere dokun. ${m.route && !seg.free ? 'Rota o noktadan geçecek şekilde gerçek yollar üzerinden yeniden bulunur.' : 'Çizgi o noktadan geçer.'} Noktaları sürükleyebilirsin.</span>
           ${m.route ? `<label><input type="checkbox" data-free="${i}" ${seg.free ? 'checked' : ''}> Yol bulmayı kapat, noktaları düz bağla</label>` : ''}
-          ${seg.vias.length ? `<div class="row"><span class="meta">${seg.vias.length} ara nokta</span><button class="ghost" data-undo="${i}">Sonuncuyu geri al</button><button class="ghost" data-clear="${i}">Temizle</button></div>` : ''}
+          ${seg.vias.length ? `<div class="row"><span class="meta">${seg.vias.length} ara nokta</span><button class="pbtn" data-undo="${i}">Sonuncuyu geri al</button><button class="pbtn" data-clear="${i}">Temizle</button></div>` : ''}
         </div>` : ''}
       </div></div>`;
   };
@@ -941,21 +946,26 @@ function renderList(){
     const icons = modes.map(k => `<span title="${MODES[k].ad}">${ICONS[MODES[k].icon]}</span>`).join('');
     const cls = g.open ? 'ghead' : `ggroup${route ? ' route' : ''}${route && first && first.dashed ? ' dashed' : ''}`;
     return `<div class="${cls}" style="${route && first && !g.open ? `--segc:${mcol(first)}` : ''}"><div class="rail"></div>
-      <button class="gbtn" data-ghost="${g.key}" aria-expanded="${g.open}" title="${g.open ? 'Gizli adımları katla' : 'Gizli adımları aç ve düzenle'}">${SVG.eyeOff}<span>${cnt} gizli adım</span><span class="gm">${icons}</span><span class="gs">${g.open ? 'katla' : sub}</span><span class="chev"></span></button></div>`;
+      <button class="gbtn" data-ghost="${g.key}" aria-expanded="${g.open}" title="${g.open ? 'Gizli adımları katla' : 'Gizli adımları aç ve düzenle'}">${SVG.eyeOff}<span>${cnt} gizli adım</span><span class="gm">${icons}</span><span class="gs">${g.open ? 'videoda görünmez · katla' : sub}</span><span class="chev"></span></button></div>`;
   };
-  let h = '';
+  /* Açık grup, görünür adımlardan ayrılsın diye hafif zeminli bir kutuya alınır */
+  let h = '', wrapG = null;
+  const lastOf = g => g.type === 'trail' || (g.type === 'lead' && !g.segs.includes(g.h1)) ? ['st', g.h1] : ['seg', g.h1];
+  const startGroup = g => { if (g.open){ h += '<div class="gwrap">'; wrapG = g; } h += groupHTML(g); };
+  const closeIf = (kind, idx) => { if (wrapG){ const l = lastOf(wrapG); if (l[0] === kind && l[1] === idx){ h += '</div>'; wrapG = null; } } };
   for (let i = 0; i < n; i++){
     const g = gs.stopG.get(i);
-    if (g && g.type === 'lead' && i === g.h0) h += groupHTML(g);
+    if (g && g.type === 'lead' && i === g.h0) startGroup(g);
     if (g && !g.open) continue;
-    h += stationHTML(i);
+    h += stationHTML(i); closeIf('st', i);
     if (i < n - 1){
       const sg = gs.segG.get(i);
-      if (sg && sg.type !== 'lead' && i === sg.segs[0]) h += groupHTML(sg);
+      if (sg && sg.type !== 'lead' && i === sg.segs[0]) startGroup(sg);
       if (sg && !sg.open) continue;
-      h += segHTML(i);
+      h += segHTML(i); closeIf('seg', i);
     }
   }
+  if (wrapG) h += '</div>';
   box.innerHTML = h;
   box.scrollTop = scroll;
   if (fid){ const el = $(fid); if (el && el !== document.activeElement) el.focus({preventScroll:true}); }
