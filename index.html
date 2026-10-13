@@ -188,9 +188,12 @@ svg{display:block}
 .dragfloat{position:fixed;z-index:3000;pointer-events:none;border-radius:18px;padding:4px 12px 0;background:var(--glass-strong);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border:1px solid var(--glass-line);box-shadow:0 26px 60px rgb(0 0 0 / .32);transform:scale(1.025) rotate(-.6deg);transform-origin:30% 50%;animation:lift .18s ease-out}
 .dragfloat .tools,.dragfloat .media-strip{visibility:hidden}
 @keyframes lift{from{transform:scale(1) rotate(0)}}
-.station.drag-src,.seg.drag-src{opacity:.18}
-.dropline{position:absolute;left:14px;right:14px;height:3px;border-radius:2px;background:var(--ink);pointer-events:none;z-index:5}
-.dropline::before{content:"";position:absolute;left:-2px;top:-4px;width:11px;height:11px;border-radius:50%;background:var(--ink);box-shadow:0 0 0 3px var(--panel-bg, transparent)}
+/* Bırakılacak yerin canlı önizlemesi: diğer duraklar kayarak yer açar, boşlukta soluk bir silüet durur */
+.slot{position:relative;margin:2px 0 4px -10px;padding-left:10px;border-radius:18px;border:1.5px dashed color-mix(in srgb,var(--ink) 38%,transparent);background:var(--fill);overflow:hidden;box-sizing:border-box;animation:slotIn .2s ease-out}
+.slot-in{opacity:.42;filter:grayscale(1);pointer-events:none}
+.slot-in .tools,.slot-in .media-strip{visibility:hidden}
+.slot-in .no{opacity:1}
+@keyframes slotIn{from{opacity:0;transform:scaleY(.92)}}
 body.dragging-list,body.dragging-list *{cursor:grabbing!important}
 body.dragging-list{-webkit-user-select:none;user-select:none}
 @keyframes settle{0%{background:var(--fill-2)}100%{background:transparent}}
@@ -1114,42 +1117,91 @@ function dragStart(stEl, x, y, viaTouch){
   if (activeSeg >= 0){ activeSeg = -1; banner(''); }
   const segEl = stEl.nextElementSibling && stEl.nextElementSibling.classList.contains('seg') ? stEl.nextElementSibling : null;
   const r = stEl.getBoundingClientRect(), lr = listEl.getBoundingClientRect();
+  const blockH = stEl.offsetHeight + (segEl ? segEl.offsetHeight : 0);
+  const stripIds = el => { el.querySelectorAll('[id]').forEach(n => n.removeAttribute('id')); el.querySelectorAll('[data-i]').forEach(n => n.removeAttribute('data-i')); return el; };
+  /* Parmağın altındaki kart */
   const fl = document.createElement('div'); fl.className = 'dragfloat'; fl.setAttribute('aria-hidden', 'true');
   fl.appendChild(stEl.cloneNode(true)); if (segEl) fl.appendChild(segEl.cloneNode(true));
-  fl.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+  stripIds(fl); fl.firstChild.removeAttribute('data-i');
   fl.style.left = (lr.left + 6) + 'px'; fl.style.width = (lr.width - 12) + 'px'; fl.style.top = (r.top - 4) + 'px';
   document.body.appendChild(fl);
-  stEl.classList.add('drag-src'); if (segEl) segEl.classList.add('drag-src');
-  const line = document.createElement('div'); line.className = 'dropline'; line.style.display = 'none'; listEl.appendChild(line);
-  drag = {from, sid:stEl.dataset.sid, stEl, segEl, fl, line, offY:y - r.top + 4, y, target:from, raf:0, viaTouch:!!viaTouch};
+  /* Listede yer tutan silüet */
+  const slot = document.createElement('div'); slot.className = 'slot'; slot.setAttribute('aria-hidden', 'true');
+  slot.style.height = (blockH + 6) + 'px';
+  const inner = document.createElement('div'); inner.className = 'slot-in';
+  inner.appendChild(stEl.cloneNode(true)); if (segEl) inner.appendChild(segEl.cloneNode(true));
+  stripIds(inner); inner.firstChild.removeAttribute('data-i');
+  slot.appendChild(inner);
+  stEl.parentNode.insertBefore(slot, stEl);
+  stEl.hidden = true; if (segEl) segEl.hidden = true;
+  drag = {from, sid:stEl.dataset.sid, stEl, segEl, fl, slot, offY:y - r.top + 4, y, raf:0, viaTouch:!!viaTouch, ghost:S.stops[from].hidden, slotKey:null};
+  drag.slotKey = drag.startKey = slotNextKey();
   document.body.classList.add('dragging-list');
-  if (document.activeElement && document.activeElement.blur && document.activeElement !== document.body && !document.activeElement.classList.contains('grip')) document.activeElement.blur();
+  const ae = document.activeElement;
+  if (ae && ae !== document.body && ae.blur && !ae.classList.contains('grip')) ae.blur();
   try { if (navigator.vibrate) navigator.vibrate(12); } catch(e){}
+  previewNumbers();
   dragMove(x, y);
   drag.raf = requestAnimationFrame(autoScroll);
+}
+/* Listedeki görünür durak satırları (sürüklenen ve silüetin içindeki kopya hariç) */
+const dragRows = () => [...listEl.querySelectorAll('.station[data-i]')].filter(el => !el.hidden && !el.closest('.slot'));
+function slotNextKey(){
+  const all = [...listEl.querySelectorAll('.station[data-i], .slot')].filter(el => el.classList.contains('slot') || (!el.hidden && !el.closest('.slot')));
+  const k = all.indexOf(drag.slot);
+  for (let j = k + 1; j < all.length; j++) if (all[j].classList.contains('station')) return all[j].dataset.sid;
+  return '__end';
+}
+/* Satırlar kayarken akıcı görünsün diye FLIP animasyonu */
+function flipMove(mutate){
+  const els = [...listEl.querySelectorAll('.station,.seg,.ggroup,.ghead')].filter(el => !el.hidden && !el.closest('.slot'));
+  const before = new Map(els.map(el => [el, el.offsetTop]));
+  mutate();
+  const moved = [];
+  for (const el of els){
+    const dy = before.get(el) - el.offsetTop;
+    if (Math.abs(dy) < 1) continue;
+    el.style.transition = 'none'; el.style.transform = `translateY(${dy}px)`; moved.push(el);
+  }
+  if (!moved.length) return;
+  void listEl.offsetHeight;
+  for (const el of moved){ el.style.transition = 'transform .22s cubic-bezier(.2,.8,.2,1)'; el.style.transform = ''; }
+}
+/* Silüetin bulunduğu yere göre numaraları canlı göster */
+function previewNumbers(){
+  if (!drag) return;
+  let n = 0;
+  listEl.querySelectorAll('.station, .slot').forEach(el => {
+    if (el.classList.contains('slot')){
+      const no = el.querySelector('.no');
+      if (!drag.ghost){ n++; if (no) no.textContent = pad2(n); }
+      return;
+    }
+    if (el.hidden || el.closest('.slot') || el.classList.contains('ghost')) return;
+    n++; const no = el.querySelector('.no'); if (no) no.textContent = pad2(n);
+  });
 }
 function dragMove(x, y){
   if (!drag) return;
   drag.y = y;
   drag.fl.style.top = (y - drag.offY) + 'px';
-  const rows = [...listEl.querySelectorAll('.station[data-i]')].filter(el => el !== drag.stEl);
   const lr = listEl.getBoundingClientRect();
-  let target = null, lineY = 0;
-  for (const el of rows){
-    const rr = el.getBoundingClientRect();
-    if (y < rr.top + rr.height / 2){ target = +el.dataset.i; lineY = rr.top - lr.top + listEl.scrollTop - 5; break; }
-  }
-  if (target === null && rows.length){
-    const last = rows[rows.length - 1], nx = last.nextElementSibling;
-    const endEl = nx && nx.classList.contains('seg') && nx !== drag.segEl ? nx : last;
-    target = +last.dataset.i + 1;
-    lineY = endEl.getBoundingClientRect().bottom - lr.top + listEl.scrollTop + 1;
-  }
-  if (target === null) target = drag.from;
-  drag.target = target;
-  const noop = target === drag.from || target === drag.from + 1;
-  drag.line.style.display = noop ? 'none' : '';
-  drag.line.style.top = lineY + 'px';
+  const yc = y - lr.top + listEl.scrollTop;
+  const rows = dragRows();
+  let before = null;
+  for (const el of rows){ if (yc < el.offsetTop + el.offsetHeight / 2){ before = el; break; } }
+  const key = before ? before.dataset.sid : '__end';
+  if (key === drag.slotKey || !rows.length) return;
+  drag.slotKey = key;
+  flipMove(() => {
+    if (before) before.parentNode.insertBefore(drag.slot, before);
+    else {
+      const last = rows[rows.length - 1], nx = last.nextElementSibling;
+      const anchor = nx && nx.classList.contains('seg') && !nx.hidden ? nx : last;
+      anchor.parentNode.insertBefore(drag.slot, anchor.nextSibling);
+    }
+  });
+  previewNumbers();
 }
 function autoScroll(){
   if (!drag) return;
@@ -1157,19 +1209,24 @@ function autoScroll(){
   let v = 0;
   if (drag.y < lr.top + edge) v = -Math.ceil((lr.top + edge - drag.y) / 4);
   else if (drag.y > lr.bottom - edge) v = Math.ceil((drag.y - (lr.bottom - edge)) / 4);
-  if (v){ const before = listEl.scrollTop; listEl.scrollTop += Math.max(-18, Math.min(18, v)); if (listEl.scrollTop !== before) dragMove(0, drag.y); }
+  if (v){ const b = listEl.scrollTop; listEl.scrollTop += Math.max(-18, Math.min(18, v)); if (listEl.scrollTop !== b) dragMove(0, drag.y); }
   drag.raf = requestAnimationFrame(autoScroll);
 }
 function dragEnd(commit){
   if (!drag) return;
-  const d = drag; drag = null;
+  const d = drag;
+  /* Silüetin önündeki durağın sırası, bırakılacak konumu verir */
+  let target = d.from;
+  if (d.slotKey && d.slotKey !== '__end'){ const idx = S.stops.findIndex(x => x.id === d.slotKey); if (idx >= 0) target = idx; }
+  else { const rows = dragRows(); const last = rows[rows.length - 1]; if (last) target = +last.dataset.i + 1; }
+  drag = null;
   cancelAnimationFrame(d.raf);
-  d.fl.remove(); d.line.remove();
+  d.fl.remove(); d.slot.remove();
+  d.stEl.hidden = false; if (d.segEl) d.segEl.hidden = false;
   document.body.classList.remove('dragging-list');
-  d.stEl.classList.remove('drag-src'); if (d.segEl) d.segEl.classList.remove('drag-src');
   justDragged = true; setTimeout(() => { justDragged = false; }, 60);
-  if (commit && d.target !== d.from && d.target !== d.from + 1) moveStop(d.from, d.target);
-  else if (renderPending) renderList();
+  if (commit && d.slotKey !== d.startKey && target !== d.from && target !== d.from + 1) moveStop(d.from, target);
+  else renderList();
 }
 /* `to`: mevcut dizide araya girilecek konum (çıkarmadan önceki indeks) */
 function moveStop(from, to, quiet){
